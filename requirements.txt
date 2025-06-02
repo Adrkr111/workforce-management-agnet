@@ -1,0 +1,8 @@
+duckdb
+pandas
+chromadb
+google-generativeai
+ag2[gemini]
+vertexai
+pyautogen
+chainlit
