@@ -1,8 +1,10 @@
-duckdb
-pandas
-chromadb
+duckdb==0.9.2
+pandas>=2.0.0
+chromadb==0.4.24
 google-generativeai
 ag2[gemini]
 vertexai
 pyautogen
 chainlit
+typing-extensions>=4.5.0
+numpy>=1.22.5
