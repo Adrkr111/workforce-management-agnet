@@ -12,6 +12,7 @@ from chromadb.config import Settings
 from datetime import datetime
 import json
 from vector_database.chroma import get_chroma_client
+import time
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -142,10 +143,51 @@ class GroupChat:
         self.message_hashes = set()
         self.last_speaker = None
         self.current_agent = None
+        self.current_context = {
+            "teams": [],
+            "last_query": None,
+            "current_comparison": None
+        }
         
         # Initialize ChromaDB collection for this session
         self.collection = get_conversation_collection(session_id)
         
+        # Load existing context from ChromaDB
+        self._load_existing_context()
+    
+    def _load_existing_context(self):
+        """Load existing context from ChromaDB at initialization"""
+        context = self._get_recent_context()
+        if context:
+            print("\nLoaded existing context from ChromaDB")
+            # Parse context to update current_context
+            self._parse_context_for_teams(context)
+    
+    def _parse_context_for_teams(self, context):
+        """Parse context string to extract team information"""
+        if not context:
+            return
+            
+        # Look for team information in the context
+        lines = context.split("\n")
+        for line in lines:
+            line = line.lower()
+            if "business:" in line and "substream:" in line and "team:" in line:
+                try:
+                    business = line.split("business:")[1].split()[0].strip()
+                    substream = line.split("substream:")[1].split()[0].strip()
+                    team = line.split("team:")[1].split()[0].strip()
+                    team_info = {"business": business, "substream": substream, "team": team}
+                    if team_info not in self.current_context["teams"]:
+                        self.current_context["teams"].append(team_info)
+                        print(f"Added team to context: {team_info}")
+                except Exception as e:
+                    print(f"Error parsing team info: {e}")
+            
+            # Look for comparison mode
+            if "comparing" in line or "compare" in line:
+                self.current_context["current_comparison"] = True
+    
     def _store_in_chroma(self, message, author):
         """Store message in ChromaDB with metadata"""
         if not self.collection:
@@ -165,6 +207,13 @@ class GroupChat:
                 "type": "conversation_message"
             }
             
+            # Add current context to metadata
+            metadata.update({
+                "teams": str(self.current_context["teams"]),
+                "comparison_mode": str(self.current_context["current_comparison"]),
+                "last_query": str(self.current_context["last_query"])
+            })
+            
             # Store message content and metadata
             self.collection.add(
                 ids=[message_id],
@@ -176,6 +225,8 @@ class GroupChat:
             
         except Exception as e:
             print(f"Error storing message in ChromaDB: {e}")
+            import traceback
+            print(traceback.format_exc())
     
     def _get_recent_context(self, limit=20):
         """Retrieve recent conversation context from ChromaDB"""
@@ -222,11 +273,47 @@ class GroupChat:
         if not message or not message.get("content"):
             return
             
+        # Update context based on message content
+        content = message.get("content", "").lower()
+        
+        # Track team information when found
+        if "business:" in content and "substream:" in content and "team:" in content:
+            try:
+                team_info = {
+                    "business": content.split("business:")[1].split("\n")[0].strip(),
+                    "substream": content.split("substream:")[1].split("\n")[0].strip(),
+                    "team": content.split("team:")[1].split("\n")[0].strip()
+                }
+                if team_info not in self.current_context["teams"]:
+                    self.current_context["teams"].append(team_info)
+                    print(f"Added new team to context: {team_info}")
+            except Exception as e:
+                print(f"Error extracting team info: {e}")
+        
+        # Track comparison requests
+        if "compare" in content:
+            self.current_context["current_comparison"] = True
+            print("Comparison mode activated")
+        
+        # Store last query if it's from user
+        if message.get("role") == "user":
+            self.current_context["last_query"] = content
+            print(f"Updated last query: {content}")
+        
         # Clean the message
         clean_message = {
             "role": message.get("role", "assistant"),
             "content": message["content"].strip()
         }
+        
+        # Add context information for agents
+        if author and author.startswith("Fetch-Volume-Forecast"):
+            context_info = f"\nCurrent context - Teams: {self.current_context['teams']}"
+            if self.current_context["current_comparison"]:
+                context_info += "\nComparison mode: Active"
+            if self.current_context["last_query"]:
+                context_info += f"\nLast query: {self.current_context['last_query']}"
+            clean_message["content"] += context_info
         
         # Store in ChromaDB
         self._store_in_chroma(clean_message, author)
@@ -239,6 +326,7 @@ class GroupChat:
             return
             
         print(f"Debug - Sending message: {clean_message} from {author}")
+        print(f"Debug - Current context: {self.current_context}")
         
         # Only send to UI if:
         # 1. Not a system message
@@ -249,10 +337,12 @@ class GroupChat:
             (author == getattr(self.current_agent, 'name', None) or 
              (clean_message["role"] == "user" and not clean_message["content"].startswith("Your response:")))):
             
-            # Remove "HUMAN INPUT REQUIRED" from UI display
+            # Remove "HUMAN INPUT REQUIRED" and context info from UI display
             display_content = clean_message["content"]
             if "==== HUMAN INPUT REQUIRED ====" in display_content:
                 display_content = display_content.replace("==== HUMAN INPUT REQUIRED ====", "").strip()
+            if "Current context -" in display_content:
+                display_content = display_content.split("\nCurrent context -")[0].strip()
             
             await cl.Message(
                 content=display_content,
@@ -390,7 +480,7 @@ class GroupChat:
                 print(f"Debug - Adding conversation context from ChromaDB")
                 context_msg = {
                     "role": "system",
-                    "content": f"Previous conversation context:\n{context}"
+                    "content": f"Previous conversation context:\n{context}\n\nCurrent teams in context: {self.current_context['teams']}\nComparison mode: {'Active' if self.current_context['current_comparison'] else 'Inactive'}\nLast query: {self.current_context['last_query']}"
                 }
                 messages = [context_msg] + messages
             
@@ -506,12 +596,26 @@ class GroupChat:
             print(traceback.format_exc())
             return None
 
+@cl.on_chat_start
+async def on_chat_start():
+    """Initialize the chat session"""
+    # Get a stable session ID from Chainlit
+    session_id = cl.user_session.get('id')
+    print(f"\nStarting new chat session: {session_id}")
+    
+    # Store the session ID in user session for reuse
+    cl.user_session.set('stable_session_id', session_id)
+
 @cl.on_message
 async def main(message: cl.Message):
-    session_id = message.session_id if hasattr(message, "session_id") else "default"
+    # Get the stable session ID
+    session_id = cl.user_session.get('stable_session_id')
+    if not session_id:
+        session_id = cl.user_session.get('id')
+        cl.user_session.set('stable_session_id', session_id)
+    
+    print(f"\nProcessing message with session ID: {session_id}")
     user_input = message.content
-
-    print(f"\nReceived message: {user_input}")
 
     # END/RESET
     if user_input.strip().lower() in ["end", "reset", "quit", "exit"]:
@@ -526,7 +630,7 @@ async def main(message: cl.Message):
     user_agent._session_id = session_id
     
     # Create and run group chat with session ID
-    print("\nStarting group chat...")
+    print(f"\nStarting group chat for session: {session_id}")
     group_chat = GroupChat(agents, user_agent, session_id)
     
     try:
