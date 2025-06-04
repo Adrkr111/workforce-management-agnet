@@ -34,21 +34,21 @@ def get_date_filter(query: str) -> dict:
         except Exception as e:
             print(f"Debug - Error parsing month date: {str(e)}")
     
-    # Handle "last X months" - this should be checked FIRST before specific dates
-    if "last" in query_lower and ("months" in query_lower or "month" in query_lower):
+    # Handle "last X months" and "past X months" - this should be checked FIRST before specific dates
+    if any(keyword in query_lower for keyword in ["last", "past"]) and ("months" in query_lower or "month" in query_lower):
         try:
             # Extract number of months
-            if "last month" in query_lower and "months" not in query_lower:
+            if any(phrase in query_lower for phrase in ["last month", "past month"]) and "months" not in query_lower:
                 num_months = 1
             else:
-                # Look for patterns like "last 4 months" or "4 months"
-                month_match = re.search(r"(?:last\s+)?(\d+)\s+months?", query_lower)
+                # Look for patterns like "last 4 months", "past 6 months", etc.
+                month_match = re.search(r"(?:last|past)\s+(\d+)\s+months?", query_lower)
                 if month_match:
                     num_months = int(month_match.group(1))
                 else:
                     num_months = 1
                 
-            print(f"Debug - Extracting data for last {num_months} months")
+            print(f"Debug - Extracting data for last/past {num_months} months")
             
             # Generate list of dates for the last N months
             dates = []
@@ -58,12 +58,46 @@ def get_date_filter(query: str) -> dict:
                 month_date = current_month - relativedelta(months=i+1)  # Start from previous month
                 dates.append(month_date.strftime("%Y-%m-%d"))
             
-            print(f"Debug - Date list for last {num_months} months: {dates}")
+            print(f"Debug - Date list for last/past {num_months} months: {dates}")
             
             return {"created_date": {"$in": dates}}
             
         except Exception as e:
             print(f"Debug - Error parsing month range: {str(e)}")
+            # Fall through to other parsing methods
+    
+    # Handle "last X years" and "past X years"
+    if any(keyword in query_lower for keyword in ["last", "past"]) and ("years" in query_lower or "year" in query_lower):
+        try:
+            # Extract number of years
+            if any(phrase in query_lower for phrase in ["last year", "past year"]) and "years" not in query_lower:
+                num_years = 1
+            else:
+                # Look for patterns like "last 2 years", "past 3 years", etc.
+                year_match = re.search(r"(?:last|past)\s+(\d+)\s+years?", query_lower)
+                if year_match:
+                    num_years = int(year_match.group(1))
+                else:
+                    num_years = 1
+            
+            # Convert years to months
+            num_months = num_years * 12
+            print(f"Debug - Extracting data for last/past {num_years} year{'s' if num_years > 1 else ''} ({num_months} months)")
+            
+            # Generate list of dates for the last N months (converted from years)
+            dates = []
+            current_month = current_date.replace(day=1)
+            
+            for i in range(num_months):
+                month_date = current_month - relativedelta(months=i+1)  # Start from previous month
+                dates.append(month_date.strftime("%Y-%m-%d"))
+            
+            print(f"Debug - Date list for last/past {num_years} year{'s' if num_years > 1 else ''}: {len(dates)} months")
+            
+            return {"created_date": {"$in": dates}}
+            
+        except Exception as e:
+            print(f"Debug - Error parsing year range: {str(e)}")
             # Fall through to other parsing methods
     
     # Handle "previous X months" (alternative to "last X months")
@@ -237,21 +271,59 @@ def fetch_kpi(query_str: str) -> Dict:
         # Check if this is a natural language query like "home-loan attrition rate last month"
         query_lower = query_str.lower()
         
-        # Handle natural language queries directly
+        # Handle natural language queries directly with dynamic number extraction
         if any(phrase in query_lower for phrase in ["last month", "previous month"]):
             current_date = datetime.now()
             last_month = current_date.replace(day=1) - relativedelta(months=1)
             date_filter = {"created_date": last_month.strftime("%Y-%m-%d")}
             print(f"Debug - Natural language: last month = {last_month.strftime('%Y-%m-%d')}")
-        elif any(phrase in query_lower for phrase in ["last 4 months", "previous 4 months", "last four months"]):
-            current_date = datetime.now()
-            dates = []
-            current_month = current_date.replace(day=1)
-            for i in range(4):
-                month_date = current_month - relativedelta(months=i+1)
-                dates.append(month_date.strftime("%Y-%m-%d"))
-            date_filter = {"created_date": {"$in": dates}}
-            print(f"Debug - Natural language: last 4 months = {dates}")
+        elif any(phrase in query_lower for phrase in ["past", "last", "previous"]) and ("month" in query_lower or "year" in query_lower):
+            # Dynamic extraction of number and time unit
+            try:
+                # Extract number of months/years using regex
+                if "year" in query_lower:
+                    # Handle years - convert to months
+                    year_match = re.search(r"(?:past|last|previous)\s+(\d+)\s*years?", query_lower)
+                    if year_match:
+                        num_years = int(year_match.group(1))
+                        num_months = num_years * 12
+                        time_unit = f"{num_years} year{'s' if num_years > 1 else ''}"
+                    else:
+                        # Handle "past year" or "last year" without number
+                        num_months = 12
+                        time_unit = "1 year"
+                elif "month" in query_lower:
+                    # Handle months
+                    month_match = re.search(r"(?:past|last|previous)\s+(\d+)\s*months?", query_lower)
+                    if month_match:
+                        num_months = int(month_match.group(1))
+                        time_unit = f"{num_months} month{'s' if num_months > 1 else ''}"
+                    else:
+                        # Default to 1 month if no number specified
+                        num_months = 1
+                        time_unit = "1 month"
+                else:
+                    num_months = 1
+                    time_unit = "1 month"
+                
+                print(f"Debug - Extracting data for {time_unit} ({num_months} months)")
+                
+                # Generate list of dates for the extracted time period
+                current_date = datetime.now()
+                dates = []
+                current_month = current_date.replace(day=1)
+                
+                for i in range(num_months):
+                    month_date = current_month - relativedelta(months=i+1)
+                    dates.append(month_date.strftime("%Y-%m-%d"))
+                
+                date_filter = {"created_date": {"$in": dates}}
+                print(f"Debug - Natural language: {time_unit} = {dates}")
+                
+            except Exception as e:
+                print(f"Debug - Error in dynamic date parsing: {e}")
+                # Fallback to existing logic
+                date_filter = get_date_filter(query_str)
         else:
             # Use existing date parsing logic
             date_filter = get_date_filter(query_str)
@@ -259,9 +331,9 @@ def fetch_kpi(query_str: str) -> Dict:
         if not date_filter:
             return {
                 "error": """Please specify a time period for the KPI data. You can use:
-• A specific date (YYYY-MM-DD)
-• A date range ("between YYYY-MM-DD and YYYY-MM-DD")
-• Relative periods ("last X months", "last month")"""
+- A specific date (YYYY-MM-DD)
+- A date range ("between YYYY-MM-DD and YYYY-MM-DD")
+- Relative periods ("last X months", "last month")"""
             }
             
         print(f"Debug - Date filter: {date_filter}")

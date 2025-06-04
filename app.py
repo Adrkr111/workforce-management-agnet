@@ -6,7 +6,8 @@ from agents import (
     forecasting_data_analyst_agent,
     data_visualization_agent,
     orchestrator_agent,
-    kpi_agent
+    kpi_agent,
+    workforce_simulation_agent
 )
 from agents.promp_engineering.fetch_forecasting_agent_prompt import fetch_forecasting_agent_system_message
 from agents.promp_engineering.forecasting_data_analyst_agent_prompt import forecasting_data_analyst_agent_system_message
@@ -75,8 +76,11 @@ def create_agents():
     # Create KPI agent
     kpi = kpi_agent.create_agent()
     
+    # Create workforce simulation agent
+    workforce_simulation = workforce_simulation_agent.create_agent()
+    
     # Add agents in order (orchestrator first)
-    agents = [orchestrator, fetch_forecast, data_analyst, visualizer, kpi]
+    agents = [orchestrator, fetch_forecast, data_analyst, visualizer, kpi, workforce_simulation]
     
     # Add async support to each agent
     for agent in agents:
@@ -105,6 +109,7 @@ def get_chainlit_author_from_role(role):
         "Forecasting-Data-Analyst-Agent": "Data Analyst",
         "Data-Visualization-Agent": "Visualization Agent",
         "KPI-Data-Agent": "KPI Agent",
+        "Workforce-Simulation-Agent": "Simulation Agent",
         "human": "You",
         "system": "System"
     }
@@ -301,77 +306,82 @@ class GroupChat:
     async def send_message(self, message, author=None):
         """Send a message to the UI and store it"""
         try:
-            print("\nDebug - Message Handler - Starting message processing")
-            print(f"Debug - Message type: {type(message)}")
-            print(f"Debug - Message content type: {type(message.get('content', ''))}")
-            print(f"Debug - Author: {author}")
-            
-            # Clean the message
-            clean_message = message.copy() if isinstance(message, dict) else {"role": "user", "content": str(message)}
-            print(f"Debug - Cleaned message: {clean_message}")
-            
-            # Handle function results
-            if message.get("role") == "function":
-                print("Debug - Processing function result")
-                try:
-                    content = message.get("content", "")
-                    print(f"Debug - Function content: {content[:200]}...")  # First 200 chars
-                    
-                    if isinstance(content, str):
-                        try:
-                            # Try to parse as JSON
-                            try:
-                                data = json.loads(content)
-                            except:
-                                data=eval(content)
-                            print("Debug - Successfully parsed content as JSON")
-                            print("Debug - Author: ",get_chainlit_author_from_role(author))
-                            if isinstance(data, dict):
-                                print(f"Debug - Data keys: {data.keys()}")
-                                
-                                # Check for visualization data
-                                if get_chainlit_author_from_role(author)=='Visualization Agent':
-                                    print("Debug - Found visualization data")
-                                    spec_data=data['spec']
-                                    fig = go.Figure(spec_data["data"], spec_data["layout"])
-                                    temp=cl.Plotly(name="Data Visualization Charts", figure=fig)
-                                    elements = [
-                                        temp
-                                    ]
-                                    await cl.Message(
-                                        content="Here's the visualization:",
-                                        elements=elements,
-                                        author=get_chainlit_author_from_role(author)
-                                    ).send()
-                                    return
+            if get_chainlit_author_from_role(author)=='You':
+                #i dont want to show the user messages on the ui so i will not send them
+                clean_message = message.copy() if isinstance(message, dict) else {"role": "user", "content": str(message)}
                 
-                                
-                        except json.JSONDecodeError as e:
-                            print(f"Debug - JSON parsing error: {e}")
-                            pass
-                    
-                    # If not a visualization, send as regular function result
-                    print("Debug - Sending regular function result")
-                    await cl.Message(
-                        content=content,
-                        author=get_chainlit_author_from_role(author)
-                    ).send()
-                    
-                except Exception as e:
-                    print(f"Debug - Error handling function result: {e}")
-                    import traceback
-                    print(f"Debug - Traceback: {traceback.format_exc()}")
-                    await cl.Message(
-                        content=message.get("content"),
-                        author=get_chainlit_author_from_role(author)
-                    ).send()
             else:
-                # Regular message
-                print("Debug - Sending regular message")
-                await cl.Message(
-                    content=clean_message["content"],
-                    author=get_chainlit_author_from_role(author or clean_message["role"])
-                ).send()
+                print("\nDebug - Message Handler - Starting message processing")
+                print(f"Debug - Message type: {type(message)}")
+                print(f"Debug - Message content type: {type(message.get('content', ''))}")
+                print(f"Debug - Author: {author}")
+                
+                # Clean the message
+                clean_message = message.copy() if isinstance(message, dict) else {"role": "user", "content": str(message)}
+                print(f"Debug - Cleaned message: {clean_message}")
+                
+                # Handle function results
+                if message.get("role") == "function":
+                    print("Debug - Processing function result")
+                    try:
+                        content = message.get("content", "")
+                        print(f"Debug - Function content: {content[:200]}...")  # First 200 chars
+                        
+                        if isinstance(content, str):
+                            try:
+                                # Try to parse as JSON
+                                try:
+                                    data = json.loads(content)
+                                except:
+                                    data=eval(content)
+                                print("Debug - Successfully parsed content as JSON")
+                                print("Debug - Author: ",get_chainlit_author_from_role(author))
+                                if isinstance(data, dict):
+                                    print(f"Debug - Data keys: {data.keys()}")
+                                    
+                                    # Check for visualization data
+                                    if get_chainlit_author_from_role(author)=='Visualization Agent':
+                                        print("Debug - Found visualization data")
+                                        spec_data=data['spec']
+                                        fig = go.Figure(spec_data["data"], spec_data["layout"])
+                                        temp=cl.Plotly(name="Data Visualization Charts", figure=fig)
+                                        elements = [
+                                            temp
+                                        ]
+                                        await cl.Message(
+                                            content="Here's the visualization:",
+                                            elements=elements,
+                                            author=get_chainlit_author_from_role(author)
+                                        ).send()
+                                        return
+                    
+                                    
+                            except json.JSONDecodeError as e:
+                                print(f"Debug - JSON parsing error: {e}")
+                                pass
+                        
+                        # If not a visualization, send as regular function result
+                        print("Debug - Sending regular function result")
+                        await cl.Message(
+                            content=content,
+                            author=get_chainlit_author_from_role(author)
+                        ).send()
+                        
+                    except Exception as e:
+                        print(f"Debug - Error handling function result: {e}")
+                        import traceback
+                        print(f"Debug - Traceback: {traceback.format_exc()}")
+                        await cl.Message(
+                            content=message.get("content"),
+                            author=get_chainlit_author_from_role(author)
+                        ).send()
+                else:
+                    # Regular message
+                    print("Debug - Sending regular message")
+                    await cl.Message(
+                        content=clean_message["content"],
+                        author=get_chainlit_author_from_role(author or clean_message["role"])
+                    ).send()
             
             # Store message and hash
             self.messages.append(clean_message)
@@ -492,6 +502,16 @@ class GroupChat:
                     )
                     if kpi_response:
                         await self.send_message(kpi_response, kpi_agent.name)
+                elif "workforce-simulation-agent" in content or "[workforce-simulation-agent]" in content or "workforce-simulation-agent:" in content:
+                    # Delegate to Workforce-Simulation-Agent
+                    workforce_simulation_agent = next(a for a in self.agents if a.name == "Workforce-Simulation-Agent")
+                    self.current_agent = workforce_simulation_agent
+                    workforce_simulation_response = await self._get_agent_reply(
+                        workforce_simulation_agent,
+                        self.messages
+                    )
+                    if workforce_simulation_response:
+                        await self.send_message(workforce_simulation_response, workforce_simulation_agent.name)
             
             # Process orchestrator's response and delegate to appropriate agents
             while True:
@@ -575,6 +595,16 @@ class GroupChat:
                         )
                         if kpi_response:
                             await self.send_message(kpi_response, kpi_agent.name)
+                    elif "workforce-simulation-agent" in content or "[workforce-simulation-agent]" in content or "workforce-simulation-agent:" in content:
+                        # Delegate to Workforce-Simulation-Agent
+                        workforce_simulation_agent = next(a for a in self.agents if a.name == "Workforce-Simulation-Agent")
+                        self.current_agent = workforce_simulation_agent
+                        workforce_simulation_response = await self._get_agent_reply(
+                            workforce_simulation_agent,
+                            self.messages
+                        )
+                        if workforce_simulation_response:
+                            await self.send_message(workforce_simulation_response, workforce_simulation_agent.name)
                 
         except Exception as e:
             print(f"Error in run_chat: {e}")
@@ -718,9 +748,15 @@ class GroupChat:
                         pass
             
             # Return original reply if no function call found
+            if reply is None:
+                return {
+                    "role": "assistant",
+                    "content": "Maximum number of consecutive auto-replies reached. Please provide input to continue."
+                }
+
             return {
                 "role": "assistant",
-                "content": reply.get("content", "")
+                "content": reply.get("content", "") if isinstance(reply, dict) else str(reply)
             }
             
         except Exception as e:

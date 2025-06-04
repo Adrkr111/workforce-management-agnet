@@ -3,5 +3,6 @@ from . import (
     forecasting_data_analyst_agent,
     data_visualization_agent,
     orchestrator_agent,
-    kpi_agent
+    kpi_agent,
+    workforce_simulation_agent
 )
