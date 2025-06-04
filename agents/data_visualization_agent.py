@@ -71,17 +71,91 @@ def create_visualization(data_str: str) -> Dict:
             if isinstance(data, list) and len(data) > 0 and all(isinstance(item, dict) for item in data):
                 print("Debug - Found simple list format")
                 
-                # Check if all items have date and value keys
-                if all("date" in item and "value" in item for item in data):
+                # Check what fields are available in the data
+                sample_item = data[0]
+                has_date = "date" in sample_item
+                has_value = "value" in sample_item or "volume" in sample_item
+                has_team = "team" in sample_item
+                
+                value_field = "value" if "value" in sample_item else "volume"
+                
+                print(f"Debug - Data structure: date={has_date}, value_field={value_field}, team={has_team}")
+                
+                # Check if data has team information for creating separate traces
+                if has_date and has_value and has_team and all("date" in item and (value_field in item) and "team" in item for item in data):
+                    print("Debug - Found team-based data, creating separate traces with hue and legends")
+                    
+                    # Group data by team
+                    teams_data = {}
+                    for item in data:
+                        team = item["team"].title()  # Capitalize team names
+                        if team not in teams_data:
+                            teams_data[team] = {"dates": [], "values": []}
+                        teams_data[team]["dates"].append(item["date"])
+                        teams_data[team]["values"].append(float(item[value_field]))
+                    
+                    # Define colors for different teams
+                    colors = ["#2E86C1", "#E74C3C", "#28B463", "#F39C12", "#8E44AD", "#17A2B8", "#FD7E14", "#20C997"]
+                    
+                    # Create traces for each team
+                    traces = []
+                    for i, (team, team_data) in enumerate(teams_data.items()):
+                        color = colors[i % len(colors)]
+                        trace = {
+                            "x": team_data["dates"],
+                            "y": team_data["values"],
+                            "type": "scatter",
+                            "mode": "lines+markers",
+                            "name": f"{team} Team",
+                            "line": {"color": color, "width": 3},
+                            "marker": {"size": 8, "color": color}
+                        }
+                        traces.append(trace)
+                    
+                    spec_data = {
+                        "data": traces,
+                        "layout": {
+                            "title": "Team Performance Comparison",
+                            "xaxis": {
+                                "title": "Date",
+                                "showgrid": True,
+                                "gridcolor": "#E1E5EA"
+                            },
+                            "yaxis": {
+                                "title": "Value",
+                                "showgrid": True,
+                                "gridcolor": "#E1E5EA"
+                            },
+                            "plot_bgcolor": "white",
+                            "paper_bgcolor": "white",
+                            "margin": {"t": 60, "b": 60, "l": 60, "r": 40},
+                            "legend": {
+                                "orientation": "v",
+                                "yanchor": "top",
+                                "y": 1,
+                                "xanchor": "left",
+                                "x": 1.02,
+                                "bgcolor": "rgba(255,255,255,0.8)",
+                                "bordercolor": "#E1E5EA",
+                                "borderwidth": 1
+                            },
+                            "hovermode": "x unified"
+                        }
+                    }
+                    print("Debug - Created multi-team Plotly spec with hue and legends")
+                    return {"spec": spec_data}
+                
+                # Check if all items have date and value keys (single series)
+                elif has_date and has_value and all("date" in item and (value_field in item) for item in data):
                     print("Debug - Converting simple list to Plotly format")
                     spec_data = {
                         "data": [{
                             "x": [item["date"] for item in data],
-                            "y": [float(item["value"]) for item in data],
+                            "y": [float(item[value_field]) for item in data],
                             "type": "scatter",
                             "mode": "lines+markers",
                             "name": "KPI Trend",
-                            "line": {"color": "#2E86C1"},
+                            "line": {"color": "#2E86C1", "width": 3},
                             "marker": {"size": 8}
                         }],
                         "layout": {
@@ -98,12 +172,62 @@ def create_visualization(data_str: str) -> Dict:
                             },
                             "plot_bgcolor": "white",
                             "paper_bgcolor": "white",
-                            "margin": {"t": 60, "b": 60, "l": 60, "r": 40}
+                            "margin": {"t": 60, "b": 60, "l": 60, "r": 40},
+                            "showlegend": True,
+                            "legend": {
+                                "orientation": "v",
+                                "yanchor": "top",
+                                "y": 1,
+                                "xanchor": "left",
+                                "x": 1.02,
+                                "bgcolor": "rgba(255,255,255,0.8)",
+                                "bordercolor": "#E1E5EA",
+                                "borderwidth": 1
+                            }
                         }
                     }
                     print("Debug - Created Plotly spec from simple list")
-                    
-                    # Check if we're in a Chainlit context before sending message
+                    return {"spec": spec_data}
+                
+                # Handle x,y coordinate data
+                elif all("x" in item and "y" in item for item in data):
+                    print("Debug - Found x,y coordinate data")
+                    spec_data = {
+                        "data": [{
+                            "x": [item["x"] for item in data],
+                            "y": [item["y"] for item in data],
+                            "type": "scatter",
+                            "mode": "lines+markers",
+                            "name": "Data Trend",
+                            "line": {"color": "#2E86C1", "width": 3},
+                            "marker": {"size": 8}
+                        }],
+                        "layout": {
+                            "title": "Data Visualization",
+                            "xaxis": {
+                                "title": "X",
+                                "showgrid": True,
+                                "gridcolor": "#E1E5EA"
+                            },
+                            "yaxis": {
+                                "title": "Y",
+                                "showgrid": True,
+                                "gridcolor": "#E1E5EA"
+                            },
+                            "plot_bgcolor": "white",
+                            "paper_bgcolor": "white",
+                            "margin": {"t": 60, "b": 60, "l": 60, "r": 40},
+                            "showlegend": True,
+                            "legend": {
+                                "orientation": "v",
+                                "yanchor": "top",
+                                "y": 1,
+                                "xanchor": "left",
+                                "x": 1.02
+                            }
+                        }
+                    }
+                    print("Debug - Created Plotly spec from x,y data")
                     return {"spec": spec_data}
             
             # If it's already a Plotly spec, return it directly
@@ -122,7 +246,7 @@ def create_visualization(data_str: str) -> Dict:
                             "type": "scatter",
                             "mode": "lines+markers",
                             "name": data.get("title", "Volume Forecast"),
-                            "line": {"color": "#2E86C1"},
+                            "line": {"color": "#2E86C1", "width": 3},
                             "marker": {"size": 8}
                         }],
                         "layout": {
@@ -139,7 +263,15 @@ def create_visualization(data_str: str) -> Dict:
                             },
                             "plot_bgcolor": "white",
                             "paper_bgcolor": "white",
-                            "margin": {"t": 60, "b": 60, "l": 60, "r": 40}
+                            "margin": {"t": 60, "b": 60, "l": 60, "r": 40},
+                            "showlegend": True,
+                            "legend": {
+                                "orientation": "v",
+                                "yanchor": "top",
+                                "y": 1,
+                                "xanchor": "left",
+                                "x": 1.02
+                            }
                         }
                     }
                     return {"spec": spec_data}
@@ -163,7 +295,7 @@ def create_visualization(data_str: str) -> Dict:
                     "type": "scatter",
                     "mode": "lines+markers",
                     "name": "Volume Forecast",
-                    "line": {"color": "#2E86C1"},
+                    "line": {"color": "#2E86C1", "width": 3},
                     "marker": {"size": 8}
                 }],
                 "layout": {
@@ -180,7 +312,15 @@ def create_visualization(data_str: str) -> Dict:
                     },
                     "plot_bgcolor": "white",
                     "paper_bgcolor": "white",
-                    "margin": {"t": 60, "b": 60, "l": 60, "r": 40}
+                    "margin": {"t": 60, "b": 60, "l": 60, "r": 40},
+                    "showlegend": True,
+                    "legend": {
+                        "orientation": "v",
+                        "yanchor": "top",
+                        "y": 1,
+                        "xanchor": "left",
+                        "x": 1.02
+                    }
                 }
             }
             
