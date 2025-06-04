@@ -1,0 +1,15 @@
+{
+    "welcome_message": "Welcome to the Workforce Management Assistant! How can I help you today?",
+    "chat_placeholder": "Type your message here...",
+    "error_message": "An error occurred. Please try again.",
+    "loading_message": "Processing your request...",
+    "copied_message": "Copied to clipboard",
+    "settings": "Settings",
+    "clear_conversation": "Clear conversation",
+    "dark_mode": "Dark mode",
+    "language": "Language",
+    "upload": "Upload",
+    "close": "Close",
+    "copy": "Copy",
+    "download": "Download"
+} 

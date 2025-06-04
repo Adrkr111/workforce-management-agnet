@@ -1,7 +1,15 @@
 import chainlit as cl
 from context_manager.context_manager import ContextManager
 from config import llm_config
-from agents import fetch_forecasting_agent, forecasting_data_analyst_agent
+from agents import (
+    fetch_forecasting_agent, 
+    forecasting_data_analyst_agent,
+    data_visualization_agent,
+    orchestrator_agent,
+    kpi_agent
+)
+from agents.promp_engineering.fetch_forecasting_agent_prompt import fetch_forecasting_agent_system_message
+from agents.promp_engineering.forecasting_data_analyst_agent_prompt import forecasting_data_analyst_agent_system_message
 from autogen.agentchat import ConversableAgent
 import asyncio
 from typing import Optional, Dict
@@ -13,6 +21,7 @@ from datetime import datetime
 import json
 from vector_database.chroma import get_chroma_client
 import time
+import plotly.graph_objects as go
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -48,14 +57,34 @@ def get_conversation_collection(session_id="default"):
 context_manager = ContextManager()
 
 def create_agents():
-    """Create and configure agents with async support"""
+    """Create and configure agents with async support and function mapping"""
     agents = []
-    for create_fn in [fetch_forecasting_agent.create_agent, forecasting_data_analyst_agent.create_agent]:
-        agent = create_fn()
+    
+    # Create agents with their respective prompts and function maps
+    orchestrator = orchestrator_agent.create_agent()
+    
+    # Create fetch forecast agent
+    fetch_forecast = fetch_forecasting_agent.create_agent()
+    
+    # Create data analyst agent
+    data_analyst = forecasting_data_analyst_agent.create_agent()
+    
+    # Create visualization agent
+    visualizer = data_visualization_agent.create_agent()
+    
+    # Create KPI agent
+    kpi = kpi_agent.create_agent()
+    
+    # Add agents in order (orchestrator first)
+    agents = [orchestrator, fetch_forecast, data_analyst, visualizer, kpi]
+    
+    # Add async support to each agent
+    for agent in agents:
         print(f"Created agent: {agent.name}")
         print(f"Agent config: {agent.llm_config}")
+        if hasattr(agent, 'function_map'):
+            print(f"Agent functions: {list(agent.function_map.keys())}")
         
-        # Ensure the agent has async capabilities
         if not hasattr(agent, 'a_generate_reply'):
             print(f"Adding async support to {agent.name}")
             async def a_generate_reply(self, messages=None, sender=None, config=None):
@@ -64,15 +93,18 @@ def create_agents():
                 print(f"Async generate result: {result}")
                 return result
             agent.a_generate_reply = a_generate_reply.__get__(agent)
-        agents.append(agent)
+    
     return agents
 
 def get_chainlit_author_from_role(role):
     mapping = {
         "user": "You",
         "assistant": "Assistant",
+        "Orchestrator-Agent": "Orchestrator",
         "Fetch-Volume-Forecast-Agent": "Forecast Agent",
         "Forecasting-Data-Analyst-Agent": "Data Analyst",
+        "Data-Visualization-Agent": "Visualization Agent",
+        "KPI-Data-Agent": "KPI Agent",
         "human": "You",
         "system": "System"
     }
@@ -95,8 +127,8 @@ class ChainlitHumanAgent(ConversableAgent):
             raise RuntimeError("No active session")
         
         try:
-            # Wait for user input without displaying the prompt again
-            response = await cl.AskUserMessage(content="Your response:").send()
+            # Wait for user input without displaying the prompt
+            response = await cl.AskUserMessage(content="").send()
             
             print(f"Debug - Raw response received: {response}")
             
@@ -107,11 +139,7 @@ class ChainlitHumanAgent(ConversableAgent):
             # Extract content based on response type
             content = None
             if isinstance(response, dict):
-                # First try output field (Chainlit's new format)
-                content = response.get('output')
-                if content is None:
-                    # Fallback to content field (older format)
-                    content = response.get('content')
+                content = response.get('output') or response.get('content')
             elif hasattr(response, 'output'):
                 content = response.output
             elif hasattr(response, 'content'):
@@ -137,6 +165,7 @@ class ChainlitHumanAgent(ConversableAgent):
 class GroupChat:
     def __init__(self, agents, user_agent, session_id="default"):
         self.agents = agents
+        self.orchestrator = next(a for a in agents if a.name == "Orchestrator-Agent")
         self.user_agent = user_agent
         self.session_id = session_id
         self.messages = []
@@ -146,7 +175,8 @@ class GroupChat:
         self.current_context = {
             "teams": [],
             "last_query": None,
-            "current_comparison": None
+            "current_comparison": None,
+            "visualizations": []
         }
         
         # Initialize ChromaDB collection for this session
@@ -270,89 +300,90 @@ class GroupChat:
     
     async def send_message(self, message, author=None):
         """Send a message to the UI and store it"""
-        if not message or not message.get("content"):
-            return
+        try:
+            print("\nDebug - Message Handler - Starting message processing")
+            print(f"Debug - Message type: {type(message)}")
+            print(f"Debug - Message content type: {type(message.get('content', ''))}")
+            print(f"Debug - Author: {author}")
             
-        # Update context based on message content
-        content = message.get("content", "").lower()
-        
-        # Track team information when found
-        if "business:" in content and "substream:" in content and "team:" in content:
-            try:
-                team_info = {
-                    "business": content.split("business:")[1].split("\n")[0].strip(),
-                    "substream": content.split("substream:")[1].split("\n")[0].strip(),
-                    "team": content.split("team:")[1].split("\n")[0].strip()
-                }
-                if team_info not in self.current_context["teams"]:
-                    self.current_context["teams"].append(team_info)
-                    print(f"Added new team to context: {team_info}")
-            except Exception as e:
-                print(f"Error extracting team info: {e}")
-        
-        # Track comparison requests
-        if "compare" in content:
-            self.current_context["current_comparison"] = True
-            print("Comparison mode activated")
-        
-        # Store last query if it's from user
-        if message.get("role") == "user":
-            self.current_context["last_query"] = content
-            print(f"Updated last query: {content}")
-        
-        # Clean the message
-        clean_message = {
-            "role": message.get("role", "assistant"),
-            "content": message["content"].strip()
-        }
-        
-        # Add context information for agents
-        if author and author.startswith("Fetch-Volume-Forecast"):
-            context_info = f"\nCurrent context - Teams: {self.current_context['teams']}"
-            if self.current_context["current_comparison"]:
-                context_info += "\nComparison mode: Active"
-            if self.current_context["last_query"]:
-                context_info += f"\nLast query: {self.current_context['last_query']}"
-            clean_message["content"] += context_info
-        
-        # Store in ChromaDB
-        self._store_in_chroma(clean_message, author)
-        
-        msg_hash = self._hash_message(clean_message, author)
-        
-        # Skip if we've seen this message before
-        if msg_hash in self.message_hashes:
-            print(f"Debug - Skipping duplicate message: {msg_hash}")
-            return
+            # Clean the message
+            clean_message = message.copy() if isinstance(message, dict) else {"role": "user", "content": str(message)}
+            print(f"Debug - Cleaned message: {clean_message}")
             
-        print(f"Debug - Sending message: {clean_message} from {author}")
-        print(f"Debug - Current context: {self.current_context}")
-        
-        # Only send to UI if:
-        # 1. Not a system message
-        # 2. Not from the same speaker as last message
-        # 3. From the current active agent or is a user message that needs to be displayed
-        if (author != "System" and 
-            author != self.last_speaker and 
-            (author == getattr(self.current_agent, 'name', None) or 
-             (clean_message["role"] == "user" and not clean_message["content"].startswith("Your response:")))):
+            # Handle function results
+            if message.get("role") == "function":
+                print("Debug - Processing function result")
+                try:
+                    content = message.get("content", "")
+                    print(f"Debug - Function content: {content[:200]}...")  # First 200 chars
+                    
+                    if isinstance(content, str):
+                        try:
+                            # Try to parse as JSON
+                            try:
+                                data = json.loads(content)
+                            except:
+                                data=eval(content)
+                            print("Debug - Successfully parsed content as JSON")
+                            print("Debug - Author: ",get_chainlit_author_from_role(author))
+                            if isinstance(data, dict):
+                                print(f"Debug - Data keys: {data.keys()}")
+                                
+                                # Check for visualization data
+                                if get_chainlit_author_from_role(author)=='Visualization Agent':
+                                    print("Debug - Found visualization data")
+                                    spec_data=data['spec']
+                                    fig = go.Figure(spec_data["data"], spec_data["layout"])
+                                    temp=cl.Plotly(name="Data Visualization Charts", figure=fig)
+                                    elements = [
+                                        temp
+                                    ]
+                                    await cl.Message(
+                                        content="Here's the visualization:",
+                                        elements=elements,
+                                        author=get_chainlit_author_from_role(author)
+                                    ).send()
+                                    return
+                
+                                
+                        except json.JSONDecodeError as e:
+                            print(f"Debug - JSON parsing error: {e}")
+                            pass
+                    
+                    # If not a visualization, send as regular function result
+                    print("Debug - Sending regular function result")
+                    await cl.Message(
+                        content=content,
+                        author=get_chainlit_author_from_role(author)
+                    ).send()
+                    
+                except Exception as e:
+                    print(f"Debug - Error handling function result: {e}")
+                    import traceback
+                    print(f"Debug - Traceback: {traceback.format_exc()}")
+                    await cl.Message(
+                        content=message.get("content"),
+                        author=get_chainlit_author_from_role(author)
+                    ).send()
+            else:
+                # Regular message
+                print("Debug - Sending regular message")
+                await cl.Message(
+                    content=clean_message["content"],
+                    author=get_chainlit_author_from_role(author or clean_message["role"])
+                ).send()
             
-            # Remove "HUMAN INPUT REQUIRED" and context info from UI display
-            display_content = clean_message["content"]
-            if "==== HUMAN INPUT REQUIRED ====" in display_content:
-                display_content = display_content.replace("==== HUMAN INPUT REQUIRED ====", "").strip()
-            if "Current context -" in display_content:
-                display_content = display_content.split("\nCurrent context -")[0].strip()
+            # Store message and hash
+            self.messages.append(clean_message)
             
-            await cl.Message(
-                content=display_content,
-                author=get_chainlit_author_from_role(author or clean_message["role"])
-            ).send()
-            self.last_speaker = author
-        
-        # Store message and hash
-        self.messages.append(clean_message)
-        self.message_hashes.add(msg_hash)
+            # Store in ChromaDB
+            await self._store_message_in_chromadb(clean_message, author)
+            
+        except Exception as e:
+            print(f"Debug - Error in send_message: {str(e)}")
+            import traceback
+            print(f"Debug - Traceback: {traceback.format_exc()}")
+            await cl.Message(f"Error sending message: {str(e)}").send()
     
     async def _execute_function(self, agent, function_call):
         """Execute a function and return its result"""
@@ -400,74 +431,158 @@ class GroupChat:
             return None
     
     async def run_chat(self, initial_message):
-        """Run the group chat"""
-        print("Debug - Starting group chat")
-        
-        # Initialize with clean initial message
-        initial_msg = {"role": "user", "content": initial_message}
-        # Store in ChromaDB and display to UI
-        await self.send_message(initial_msg, "You")
-        self.messages = [initial_msg]
-        
-        current_agent_idx = 0
-        max_rounds = 10
-        current_round = 0
-        last_agent = None
-        
-        while current_round < max_rounds:
-            self.current_agent = self.agents[current_agent_idx]
-            print(f"\nDebug - Round {current_round + 1}, Agent: {self.current_agent.name}")
+        """Modified to use orchestrator-based routing"""
+        try:
+            # Always start with the orchestrator
+            self.current_agent = self.orchestrator
             
-            # Get reply from current agent
-            reply = await self._get_agent_reply(self.current_agent, self.messages.copy(), last_agent)
-            if not reply:
-                print(f"Debug - No reply from {self.current_agent.name}")
-                break
+            # Format initial message correctly
+            initial_msg = {"role": "user", "content": initial_message}
+            await self.send_message(initial_msg, "You")
             
-            print(f"Debug - Agent reply received: {reply}")
+            # Send initial message to orchestrator
+            response = await self._get_agent_reply(
+                self.orchestrator,
+                [initial_msg]
+            )
             
-            # Handle function calls if present
-            if reply.get("function_call"):
-                print(f"Debug - Function call detected: {reply['function_call']}")
-                function_result = await self._execute_function(self.current_agent, reply["function_call"])
+            if response:
+                # Send orchestrator's response to UI
+                await self.send_message(response, self.orchestrator.name)
                 
-                if function_result:
-                    print(f"Debug - Function executed successfully: {function_result}")
-                    # Send function result and wait for agent's interpretation
-                    self.messages.append(function_result)
-                    interpretation = await self._get_agent_reply(self.current_agent, self.messages.copy(), last_agent)
-                    if interpretation:
-                        await self.send_message(interpretation, self.current_agent.name)
-                    continue
-                else:
-                    print("Debug - Function execution failed")
+                # Check for agent delegation patterns
+                content = response.get("content", "").lower()
+                if "fetch-volume-forecast-agent" in content or "[fetch-volume-forecast-agent]" in content or "fetch-volume-forecast-agent:" in content:
+                    # Delegate to Fetch-Volume-Forecast-Agent
+                    fetch_agent = next(a for a in self.agents if a.name == "Fetch-Volume-Forecast-Agent")
+                    self.current_agent = fetch_agent
+                    fetch_response = await self._get_agent_reply(
+                        fetch_agent,
+                        self.messages
+                    )
+                    if fetch_response:
+                        await self.send_message(fetch_response, fetch_agent.name)
+                elif "data-visualization-agent" in content or "[data-visualization-agent]" in content or "data-visualization-agent:" in content:
+                    # Delegate to Data-Visualization-Agent
+                    viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
+                    self.current_agent = viz_agent
+                    viz_response = await self._get_agent_reply(
+                        viz_agent,
+                        self.messages
+                    )
+                    if viz_response:
+                        await self.send_message(viz_response, viz_agent.name)
+                elif "forecasting-data-analyst-agent" in content or "[forecasting-data-analyst-agent]" in content or "forecasting-data-analyst-agent:" in content:
+                    # Delegate to Forecasting-Data-Analyst-Agent
+                    analyst_agent = next(a for a in self.agents if a.name == "Forecasting-Data-Analyst-Agent")
+                    self.current_agent = analyst_agent
+                    analyst_response = await self._get_agent_reply(
+                        analyst_agent,
+                        self.messages
+                    )
+                    if analyst_response:
+                        await self.send_message(analyst_response, analyst_agent.name)
+                elif "kpi-data-agent" in content or "[kpi-data-agent]" in content or "kpi-data-agent:" in content:
+                    # Delegate to KPI-Data-Agent
+                    kpi_agent = next(a for a in self.agents if a.name == "KPI-Data-Agent")
+                    self.current_agent = kpi_agent
+                    kpi_response = await self._get_agent_reply(
+                        kpi_agent,
+                        self.messages
+                    )
+                    if kpi_response:
+                        await self.send_message(kpi_response, kpi_agent.name)
             
-            # For non-function messages, send the reply
-            await self.send_message(reply, self.current_agent.name)
-            last_agent = self.current_agent
-            
-            # Check if human input is needed
-            if "==== HUMAN INPUT REQUIRED ====" in reply["content"]:
-                print("Debug - Human input needed")
-                human_reply = await self._get_human_reply(reply)
+            # Process orchestrator's response and delegate to appropriate agents
+            while True:
+                if not response or "TERMINATE" in response.get("content", ""):
+                    break
+                    
+                # Check if response contains visualization spec
+                if "spec" in response.get("content", ""):
+                    try:
+                        data = json.loads(response["content"])
+                        if isinstance(data, dict):
+                            if "type" in data and data["type"] == "vega-lite" and "spec" in data:
+                                # Send Vega-Lite visualization to UI
+                                elements = [
+                                    cl.Vega(data["spec"])
+                                ]
+                                await cl.Message(
+                                    content="Here's the visualization you requested:",
+                                    elements=elements
+                                ).send()
+                    except:
+                        pass
                 
-                if human_reply:
-                    print(f"Debug - Human reply received: '{human_reply}'")
-                    # Send the human reply to UI and store it
-                    await self.send_message(human_reply, "You")
-                    self.messages.append(human_reply)
-                    continue
-                else:
-                    print("Debug - No valid human reply received")
+                # Get next message from user
+                user_message = await self._get_human_reply(response)
+                if not user_message:
                     break
             
-            # Move to next agent only if current agent doesn't need to continue
-            if not reply.get("content", "").endswith("==== DATA RETRIEVED ===="):
-                current_agent_idx = (current_agent_idx + 1) % len(self.agents)
-                if current_agent_idx == 0:
-                    current_round += 1
-                    print(f"Debug - Completed round {current_round}")
-                self.current_agent = None  # Reset current agent when switching
+                # Store user message
+                await self.send_message(user_message, "You")
+                
+                # Route through orchestrator again
+                response = await self._get_agent_reply(
+                    self.orchestrator,
+                    self.messages
+                )
+                
+                if response:
+                    # Send orchestrator's response to UI
+                    await self.send_message(response, self.orchestrator.name)
+                    
+                    # Check for agent delegation again
+                    content = response.get("content", "").lower()
+                    if "fetch-volume-forecast-agent" in content or "[fetch-volume-forecast-agent]" in content or "fetch-volume-forecast-agent:" in content:
+                        # Delegate to Fetch-Volume-Forecast-Agent
+                        fetch_agent = next(a for a in self.agents if a.name == "Fetch-Volume-Forecast-Agent")
+                        self.current_agent = fetch_agent
+                        fetch_response = await self._get_agent_reply(
+                            fetch_agent,
+                            self.messages
+                        )
+                        if fetch_response:
+                            await self.send_message(fetch_response, fetch_agent.name)
+                    elif "data-visualization-agent" in content or "[data-visualization-agent]" in content or "data-visualization-agent:" in content:
+                        # Delegate to Data-Visualization-Agent
+                        viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
+                        self.current_agent = viz_agent
+                        viz_response = await self._get_agent_reply(
+                            viz_agent,
+                            self.messages
+                        )
+                        if viz_response:
+                            await self.send_message(viz_response, viz_agent.name)
+                    elif "forecasting-data-analyst-agent" in content or "[forecasting-data-analyst-agent]" in content or "forecasting-data-analyst-agent:" in content:
+                        # Delegate to Forecasting-Data-Analyst-Agent
+                        analyst_agent = next(a for a in self.agents if a.name == "Forecasting-Data-Analyst-Agent")
+                        self.current_agent = analyst_agent
+                        analyst_response = await self._get_agent_reply(
+                            analyst_agent,
+                            self.messages
+                        )
+                        if analyst_response:
+                            await self.send_message(analyst_response, analyst_agent.name)
+                    elif "kpi-data-agent" in content or "[kpi-data-agent]" in content or "kpi-data-agent:" in content:
+                        # Delegate to KPI-Data-Agent
+                        kpi_agent = next(a for a in self.agents if a.name == "KPI-Data-Agent")
+                        self.current_agent = kpi_agent
+                        kpi_response = await self._get_agent_reply(
+                            kpi_agent,
+                            self.messages
+                        )
+                        if kpi_response:
+                            await self.send_message(kpi_response, kpi_agent.name)
+                
+        except Exception as e:
+            print(f"Error in run_chat: {e}")
+            import traceback
+            print(traceback.format_exc())
+            await cl.Message(
+                content=f"I encountered an error: {str(e)}. Please try again."
+            ).send()
     
     async def _get_agent_reply(self, agent, messages, last_agent=None):
         """Get a reply from an agent"""
@@ -489,15 +604,23 @@ class GroupChat:
             # Clean messages while preserving function calls
             clean_messages = []
             for msg in messages:
-                clean_msg = {
-                    "role": msg.get("role", "assistant"),
-                    "content": msg.get("content", "")
-                }
-                if msg.get("function_call"):
-                    clean_msg["function_call"] = msg["function_call"]
-                if msg.get("name"):  # For function response messages
-                    clean_msg["name"] = msg["name"]
-                    clean_msg["role"] = "function"  # Ensure proper role for function messages
+                # Handle string messages
+                if isinstance(msg, str):
+                    clean_msg = {
+                        "role": "user",
+                        "content": msg
+                    }
+                else:
+                    # Handle dict messages
+                    clean_msg = {
+                        "role": msg.get("role", "assistant"),
+                        "content": msg.get("content", "")
+                    }
+                    if msg.get("function_call"):
+                        clean_msg["function_call"] = msg["function_call"]
+                    if msg.get("name"):  # For function response messages
+                        clean_msg["name"] = msg["name"]
+                        clean_msg["role"] = "function"  # Ensure proper role for function messages
                 clean_messages.append(clean_msg)
             
             if hasattr(agent, 'a_generate_reply'):
@@ -515,61 +638,90 @@ class GroupChat:
             
             print(f"Debug - Raw agent reply: {reply}")
             
-            # Handle different reply formats
-            if isinstance(reply, tuple) and len(reply) == 2:
-                success, content = reply
-                if success and content:
-                    if isinstance(content, dict):
-                        return {
-                            "role": "assistant",
-                            "content": content.get("content", ""),
-                            "function_call": content.get("function_call")
-                        }
-                    return {"role": "assistant", "content": str(content)}
-            elif isinstance(reply, dict):
-                # Check for function call in content
-                if reply.get("content"):
-                    content = reply["content"]
-                    if "{" in content and "}" in content:
-                        try:
-                            # Find the JSON object in the content
-                            import json
-                            import re
+            # Handle function calls in the reply
+            if isinstance(reply, dict):
+                # First check for direct function_call
+                if reply.get("function_call"):
+                    function_call = reply["function_call"]
+                    if hasattr(agent, "function_map"):
+                        func_name = function_call.get("name")
+                        if func_name in agent.function_map:
+                            func = agent.function_map[func_name]
+                            args = function_call.get("arguments", "")
+                            print(f"Debug - {agent.name} executing function {func_name} with args: {args}")
+                            result = func(args)
+                            print(f"Debug - Function result from {agent.name}: {result}")
                             
-                            # Find all JSON-like structures
-                            json_matches = re.findall(r'\{[^{}]*\}', content)
-                            for json_str in json_matches:
-                                try:
-                                    json_obj = json.loads(json_str)
-                                    if json_obj.get("function_call") or (json_obj.get("name") == "fetch_forecast" and json_obj.get("arguments")):
-                                        # Found a valid function call
-                                        function_call = json_obj.get("function_call", json_obj)
-                                        # Clean the content by removing the JSON
-                                        clean_content = re.sub(r'\{[^{}]*\}', '', content).strip()
-                                        return {
-                                            "role": "assistant",
-                                            "content": clean_content,
-                                            "function_call": {
-                                                "name": function_call.get("name"),
-                                                "arguments": function_call.get("arguments")
-                                            }
-                                        }
-                                except json.JSONDecodeError:
-                                    continue
-                        except Exception as e:
-                            print(f"Error parsing function call: {e}")
+                            # Format and return the result
+                            if isinstance(result, dict):
+                                if 'results' in result:
+                                    return {
+                                        "role": "function",
+                                        "name": func_name,
+                                        "content": str(result['results'])
+                                    }
+                                elif 'error' in result:
+                                    return {
+                                        "role": "function",
+                                        "name": func_name,
+                                        "content": f"Error: {result['error']}"
+                                    }
+                            return {
+                                "role": "function",
+                                "name": func_name,
+                                "content": str(result)
+                            }
                 
-                # If no function call found in content, return as is
-                return {
-                    "role": "assistant",
-                    "content": reply.get("content", str(reply)),
-                    "function_call": reply.get("function_call")
-                }
-            elif isinstance(reply, str):
-                return {"role": "assistant", "content": reply}
+                # Check for function call in content
+                content = reply.get("content", "")
+                if isinstance(content, str) and "function_call" in content:
+                    try:
+                        # Try to parse JSON from content
+                        import json
+                        # Find the JSON object in the content
+                        start = content.find("{")
+                        end = content.rfind("}") + 1
+                        if start >= 0 and end > start:
+                            json_str = content[start:end]
+                            json_obj = json.loads(json_str)
+                            if "function_call" in json_obj:
+                                function_call = json_obj["function_call"]
+                                if hasattr(agent, "function_map"):
+                                    func_name = function_call.get("name")
+                                    if func_name in agent.function_map:
+                                        func = agent.function_map[func_name]
+                                        args = function_call.get("arguments", "")
+                                        print(f"Debug - {agent.name} executing function {func_name} with args: {args}")
+                                        result = func(args)
+                                        print(f"Debug - Function result from {agent.name}: {result}")
+                                        
+                                        # Format and return the result
+                                        if isinstance(result, dict):
+                                            if 'results' in result:
+                                                return {
+                                                    "role": "function",
+                                                    "name": func_name,
+                                                    "content": str(result['results'])
+                                                }
+                                            elif 'error' in result:
+                                                return {
+                                                    "role": "function",
+                                                    "name": func_name,
+                                                    "content": f"Error: {result['error']}"
+                                                }
+                                        return {
+                                            "role": "function",
+                                            "name": func_name,
+                                            "content": str(result)
+                                        }
+                    except json.JSONDecodeError:
+                        pass
             
-            print("Debug - No valid reply format found")
-            return None
+            # Return original reply if no function call found
+            return {
+                "role": "assistant",
+                "content": reply.get("content", "")
+            }
             
         except Exception as e:
             print(f"Error in _get_agent_reply: {e}")
@@ -581,11 +733,12 @@ class GroupChat:
         """Get reply from human"""
         try:
             print("Debug - Getting human reply")
-            response = await self.user_agent.get_human_input(agent_message["content"])
+            response = await self.user_agent.get_human_input("")  # Remove prompt text
             
             if response and response.strip():
                 print(f"Debug - Got human response: '{response}'")
-                return {"role": "user", "content": response}
+                # Return simple string content, not nested structure
+                return {"role": "user", "content": response.strip()}
             
             print("Debug - No valid human response received")
             return None
@@ -595,6 +748,46 @@ class GroupChat:
             import traceback
             print(traceback.format_exc())
             return None
+
+    async def _store_message_in_chromadb(self, message, author):
+        """Store message in ChromaDB with metadata"""
+        if not self.collection:
+            print("Warning: No conversation collection available")
+            return
+            
+        try:
+            # Create unique ID for the message
+            message_id = f"conv_{self.session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            
+            # Prepare metadata
+            metadata = {
+                "timestamp": datetime.now().isoformat(),
+                "author": author,
+                "role": message.get("role", "unknown"),
+                "session_id": self.session_id,
+                "type": "conversation_message"
+            }
+            
+            # Add current context to metadata
+            metadata.update({
+                "teams": str(self.current_context["teams"]),
+                "comparison_mode": str(self.current_context["current_comparison"]),
+                "last_query": str(self.current_context["last_query"])
+            })
+            
+            # Store message content and metadata
+            self.collection.add(
+                ids=[message_id],
+                documents=[message.get("content", "")],
+                metadatas=[metadata]
+            )
+            
+            print(f"Debug - Stored conversation message in ChromaDB: {message_id}")
+            
+        except Exception as e:
+            print(f"Error storing message in ChromaDB: {e}")
+            import traceback
+            print(traceback.format_exc())
 
 @cl.on_chat_start
 async def on_chat_start():

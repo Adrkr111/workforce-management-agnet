@@ -32,7 +32,7 @@ def fetch_forecast(args: str):
         print("Debug - Querying vector database...")
         results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=5,
+            n_results=3,
             include=["documents", "metadatas", "distances"]
         )
         
