@@ -35,7 +35,7 @@ class VectorSearchDataStore:
         self.search_results = {}  # session_id -> list of search results
         
     def store_search_result(self, session_id, query_type, business, substream, team, result_data, metadata=None):
-        """Store vector search result with chronological ordering - ENHANCED AUDIT LOGGING"""
+        """Store vector search result with chronological ordering - ENHANCED RAW DATA LOGGING"""
         if session_id not in self.search_results:
             self.search_results[session_id] = []
             print(f"🆕 AUDIT - Created new data store session: {session_id}")
@@ -55,8 +55,8 @@ class VectorSearchDataStore:
         
         self.search_results[session_id].append(search_entry)
         
-        # 📊 COMPREHENSIVE AUDIT LOGGING
-        print(f"📊 AUDIT - STORED VECTOR SEARCH RESULT:")
+        # 📊 COMPREHENSIVE RAW DATA LOGGING
+        print(f"📊 RAW DATA STORAGE - COMPLETE DATA DUMP:")
         print(f"   🆔 Entry ID: {search_entry['entry_id']}")
         print(f"   📅 Timestamp: {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
         print(f"   🔍 Query Type: {query_type}")
@@ -64,7 +64,29 @@ class VectorSearchDataStore:
         print(f"   🌊 Substream: {substream}")
         print(f"   👥 Team: {team}")
         print(f"   📦 Data Size: {len(str(result_data))} characters")
-        print(f"   📋 Data Preview: {str(result_data)[:100]}...")
+        
+        # 🔥 RAW DATA COMPLETE DUMP
+        print(f"   🔥 RAW RESULT DATA (FULL):")
+        print(f"      📝 Type: {type(result_data)}")
+        if isinstance(result_data, dict):
+            print(f"      📊 Dict Keys: {list(result_data.keys())}")
+            for key, value in result_data.items():
+                print(f"      🔑 [{key}]: {str(value)[:200]}{'...' if len(str(value)) > 200 else ''}")
+        elif isinstance(result_data, list):
+            print(f"      📋 List Length: {len(result_data)}")
+            for i, item in enumerate(result_data[:3]):  # Show first 3 items
+                print(f"      🔢 [{i}]: {str(item)[:200]}{'...' if len(str(item)) > 200 else ''}")
+        else:
+            print(f"      📄 String/Other Content:")
+            print(f"      {str(result_data)[:500]}{'...' if len(str(result_data)) > 500 else ''}")
+        
+        # 🔥 RAW METADATA COMPLETE DUMP
+        if metadata:
+            print(f"   🔥 RAW METADATA (FULL):")
+            print(f"      📝 Type: {type(metadata)}")
+            for key, value in metadata.items():
+                print(f"      🏷️ [{key}]: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+        
         print(f"   🗃️ Session Total: {len(self.search_results[session_id])} entries")
         
         # Keep only last 50 entries per session to prevent memory bloat
@@ -73,12 +95,12 @@ class VectorSearchDataStore:
             self.search_results[session_id] = self.search_results[session_id][-50:]
             print(f"🗑️ AUDIT - Cleaned up {removed_count} old entries, kept 50 most recent")
             
-        print(f"✅ AUDIT - Successfully stored {query_type} search result for {business}-{substream}-{team}")
+        print(f"✅ RAW DATA STORED - {query_type} data for {business}-{substream}-{team}")
         return search_entry["entry_id"]
     
     def get_latest_results(self, session_id, query_type=None, business=None, substream=None, team=None, limit=10):
-        """Get latest search results matching criteria - ENHANCED AUDIT LOGGING"""
-        print(f"🔍 AUDIT - RETRIEVING VECTOR SEARCH RESULTS:")
+        """Get latest search results matching criteria - ENHANCED RAW DATA LOGGING"""
+        print(f"🔍 RAW DATA RETRIEVAL - COMPLETE DUMP:")
         print(f"   🆔 Session ID: {session_id}")
         print(f"   🔍 Query Type: {query_type or 'ANY'}")
         print(f"   🏢 Business: {business or 'ANY'}")
@@ -87,11 +109,24 @@ class VectorSearchDataStore:
         print(f"   📊 Limit: {limit}")
         
         if session_id not in self.search_results:
-            print(f"❌ AUDIT - No data store found for session: {session_id}")
+            print(f"❌ RAW DATA - No data store found for session: {session_id}")
             return []
             
         results = self.search_results[session_id]
-        print(f"📦 AUDIT - Total entries in session: {len(results)}")
+        print(f"📦 RAW DATA - Total entries in session: {len(results)}")
+        
+        # 🔥 DUMP ALL RAW ENTRIES IN SESSION
+        print(f"🔥 RAW DATA SESSION DUMP - ALL ENTRIES:")
+        for i, result in enumerate(results):
+            print(f"   📋 Entry [{i+1}]:")
+            print(f"      🆔 ID: {result['entry_id']}")
+            print(f"      📅 Time: {result['timestamp'].strftime('%H:%M:%S')}")
+            print(f"      🔍 Type: {result['query_type']}")
+            print(f"      🏢 Business: {result['business']}")
+            print(f"      🌊 Substream: {result['substream']}")
+            print(f"      👥 Team: {result['team']}")
+            print(f"      📦 Data Preview: {str(result['result_data'])[:100]}...")
+            print(f"      📄 Data Type: {type(result['result_data'])}")
         
         # Filter by criteria
         filtered_results = []
@@ -108,20 +143,32 @@ class VectorSearchDataStore:
                 
             if match:
                 filtered_results.append(result)
-                print(f"✅ AUDIT - Match found: {result['business']}-{result['substream']}-{result['team']} @ {result['timestamp'].strftime('%H:%M:%S')}")
+                print(f"✅ RAW DATA MATCH: {result['business']}-{result['substream']}-{result['team']} @ {result['timestamp'].strftime('%H:%M:%S')}")
         
         # Sort by timestamp (most recent first)
         filtered_results.sort(key=lambda x: x["timestamp_sort"], reverse=True)
         final_results = filtered_results[:limit]
         
-        print(f"📊 AUDIT - RETRIEVAL SUMMARY:")
-        print(f"   🔍 Filtered matches: {len(filtered_results)}")
-        print(f"   📤 Returned results: {len(final_results)}")
+        print(f"📊 RAW DATA RETRIEVAL SUMMARY:")
+        print(f"   🔍 Total session entries: {len(results)}")
+        print(f"   ✅ Filtered matches: {len(filtered_results)}")
+        print(f"   📤 Final returned: {len(final_results)}")
         
+        # 🔥 DUMP FINAL RETURNED RAW DATA
         if final_results:
-            latest = final_results[0]
-            print(f"   🏆 Latest entry: {latest['business']}-{latest['substream']}-{latest['team']} ({latest['timestamp'].strftime('%H:%M:%S')})")
-            print(f"   📦 Latest data preview: {str(latest['result_data'])[:100]}...")
+            print(f"🔥 FINAL RAW DATA BEING RETURNED:")
+            for i, result in enumerate(final_results):
+                print(f"   📋 Result [{i+1}]:")
+                print(f"      🆔 ID: {result['entry_id']}")
+                print(f"      📅 Time: {result['timestamp'].strftime('%H:%M:%S')}")
+                print(f"      🏢 {result['business']}-{result['substream']}-{result['team']}")
+                print(f"      📦 Raw Data Type: {type(result['result_data'])}")
+                print(f"      📄 Raw Data Content:")
+                if isinstance(result['result_data'], dict):
+                    for key, value in result['result_data'].items():
+                        print(f"         🔑 [{key}]: {str(value)[:150]}{'...' if len(str(value)) > 150 else ''}")
+                else:
+                    print(f"         📝 {str(result['result_data'])[:300]}{'...' if len(str(result['result_data'])) > 300 else ''}")
         
         return final_results
     
@@ -379,12 +426,12 @@ def set_agent_data_store_context(agents, session_id):
     except Exception as e:
         print(f"⚠️ Failed to set data store context for fetch agent: {e}")
     
-    # Add similar for KPI agent when implemented
-    # try:
-    #     from agents import kpi_agent
-    #     kpi_agent.set_data_store_context(data_store, session_id)
-    # except Exception as e:
-    #     print(f"⚠️ Failed to set data store context for KPI agent: {e}")
+    # Set context for KPI agent
+    try:
+        kpi_agent.set_data_store_context(data_store, session_id)
+        print(f"✅ Set data store context for KPI agent: {session_id}")
+    except Exception as e:
+        print(f"⚠️ Failed to set data store context for KPI agent: {e}")
     
     return data_store
 
@@ -452,11 +499,29 @@ class GroupChat:
     
     def _load_existing_context(self):
         """Load existing context from ChromaDB at initialization"""
+        # 🔧 CRITICAL FIX: Check if we have a valid collection first
+        if not self.collection:
+            print("📚 No collection available - starting with clean context")
+            return
+            
+        try:
+            # Quick check if collection exists and has data
+            test_results = self.collection.get(limit=1)
+            if not test_results or not test_results.get('documents'):
+                print("📚 No existing context found - starting with clean context")
+                return
+        except Exception as e:
+            print(f"📚 Error checking collection - starting with clean context: {e}")
+            return
+            
+        # Only proceed if we have valid data
         context = self._get_recent_context()
         if context:
             print("📚 Loaded existing context from ChromaDB")
             # Parse context to update current_context
             self._parse_context_for_teams(context)
+        else:
+            print("📚 No valid context found - starting with clean context")
     
     def _parse_context_for_teams(self, context):
         """Parse context string to extract team information"""
@@ -673,12 +738,21 @@ class GroupChat:
                                     data = json.loads(content)
                                     print("✅ Successfully parsed content as JSON")
                                 except json.JSONDecodeError:
-                                    # Try eval for Python dict format (safely)
-                                    if not any(dangerous in content.lower() for dangerous in ['import', 'exec', '__']):
-                                        data = eval(content)
-                                        print("✅ Successfully parsed content with eval")
-                                    else:
-                                        raise ValueError("Potentially dangerous content")
+                                    # 🔧 TRY PYTHON DICT PARSING (for visualization agent results)
+                                    try:
+                                        # Check if it looks like a Python dict
+                                        if content.strip().startswith('{') and content.strip().endswith('}'):
+                                            # Safe evaluation for dict strings
+                                            import ast
+                                            data = ast.literal_eval(content)
+                                            print("✅ Successfully parsed content as Python dict")
+                                        else:
+                                            raise ValueError("Not a dict format")
+                                    except (ValueError, SyntaxError):
+                                        # 🔧 SAFER APPROACH: Don't use eval() for function results
+                                        # For KPI and other function results, treat as regular text
+                                        print("✅ Treating content as regular text (not JSON/dict)")
+                                        data = {"text_content": content}
                                 
                                 print("Debug - Author: ", get_chainlit_author_from_role(author))
                                 if isinstance(data, dict):
@@ -1107,18 +1181,68 @@ Displaying raw data instead."""
                     # 🎯 SINGLE DATASET MODE (EXISTING LOGIC)
                     else:
                         print("🎯 AUDIT - SINGLE DATASET MODE")
-                        matching_data = self.vector_data_store.get_latest_results(
+                        
+                        # 🔍 ENHANCED: Try different data types based on context
+                        matching_data = None
+                        data_type = "unknown"
+                        
+                        # First try forecast data
+                        forecast_data = self.vector_data_store.get_latest_results(
                             session_id=self.session_id,
-                            query_type="forecast",  # Could expand to KPI, etc.
+                            query_type="forecast",
                             business=user_intent.get('business'),
                             substream=user_intent.get('substream'),
                             team=user_intent.get('team'),
                             limit=5
                         )
                         
+                        # Then try KPI data
+                        kpi_data = self.vector_data_store.get_latest_results(
+                            session_id=self.session_id,
+                            query_type="kpi",
+                            limit=5
+                        )
+                        
+                        print(f"🔍 AUDIT - DATA SEARCH RESULTS:")
+                        print(f"   📊 Forecast data: {len(forecast_data)} entries")
+                        print(f"   📋 KPI data: {len(kpi_data)} entries")
+                        
+                        # 📊 DETAILED LOGGING: Show what's available in vector data store
+                        if forecast_data:
+                            print(f"\n📊 AUDIT - AVAILABLE FORECAST DATA:")
+                            for i, entry in enumerate(forecast_data[:3], 1):  # Show first 3 entries
+                                print(f"   [{i}] {entry['business']}-{entry['substream']}-{entry['team']}")
+                                print(f"       📅 Timestamp: {entry['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
+                                print(f"       📦 Data size: {len(str(entry['result_data']))} chars")
+                                print(f"       📋 Data preview: '{str(entry['result_data'])[:100]}...'")
+                                print(f"       🆔 Entry ID: {entry['entry_id']}")
+                            if len(forecast_data) > 3:
+                                print(f"   ... and {len(forecast_data) - 3} more forecast entries")
+                        
+                        if kpi_data:
+                            print(f"\n📋 AUDIT - AVAILABLE KPI DATA:")
+                            for i, entry in enumerate(kpi_data[:3], 1):  # Show first 3 entries
+                                print(f"   [{i}] {entry.get('business', 'multiple')} departments")
+                                print(f"       📅 Timestamp: {entry['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
+                                print(f"       📦 Data size: {len(str(entry['result_data']))} chars")
+                                print(f"       📋 Data preview: '{str(entry['result_data'])[:100]}...'")
+                                print(f"       🆔 Entry ID: {entry['entry_id']}")
+                            if len(kpi_data) > 3:
+                                print(f"   ... and {len(kpi_data) - 3} more KPI entries")
+                        
+                        # Prioritize data based on recency and relevance
+                        if forecast_data:
+                            matching_data = forecast_data
+                            data_type = "forecast"
+                            print("✅ AUDIT - Using forecast data for visualization")
+                        elif kpi_data:
+                            matching_data = kpi_data
+                            data_type = "kpi"
+                            print("✅ AUDIT - Using KPI data for visualization")
+                        
                         if not matching_data:
                             print("❌ AUDIT - NO MATCHING DATA FOUND:")
-                            print("   📊 Vector data store query returned empty results")
+                            print("   📊 Vector data store query returned empty results for both forecast and KPI data")
                             
                             viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
                             
@@ -1133,7 +1257,7 @@ Displaying raw data instead."""
                             
                             error_response = {
                                 "role": "assistant",
-                                "content": f"❌ **Data Not Found**: I couldn't find any forecast data{intent_str} to visualize. Please first fetch some forecast data using a command like:\n\n`Fetch-Volume-Forecast-Agent: Get forecast for business-logistics substream-dlt team-support`\n\nThen I can create a visualization for you."
+                                "content": f"❌ **Data Not Found**: I couldn't find any forecast or KPI data{intent_str} to visualize. Please first fetch some data using commands like:\n\n• `Fetch-Volume-Forecast-Agent: Get forecast for business-logistics substream-dlt team-support`\n• `KPI-Data-Agent: Get home loan attrition rate last month`\n\nThen I can create a visualization for you."
                             }
                             await self.send_message(error_response, viz_agent.name)
                             return  # Exit early
@@ -1141,12 +1265,39 @@ Displaying raw data instead."""
                         # 🎯 FOUND MATCHING DATA - CREATE SINGLE VISUALIZATION (EXISTING LOGIC)
                         selected_data = matching_data[0]  # Use most recent matching data
                         print(f"✅ AUDIT - FOUND MATCHING DATA:")
-                        print(f"   🏆 Selected: {selected_data['business']}-{selected_data['substream']}-{selected_data['team']}")
+                        print(f"   🔧 Data Type: {data_type}")
+                        if data_type == "forecast":
+                            print(f"   🏆 Selected: {selected_data['business']}-{selected_data['substream']}-{selected_data['team']}")
+                        else:
+                            print(f"   🏆 Selected: {data_type} data from {selected_data.get('business', 'multiple')} departments")
                         print(f"   📅 Timestamp: {selected_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
                         print(f"   🆔 Entry ID: {selected_data['entry_id']}")
                         print(f"   📦 Data size: {len(str(selected_data['result_data']))} characters")
                         
-                        # 🔧 ENHANCED: Generic data parsing for multiple formats (EXISTING LOGIC)
+                        # 🔍 COMPREHENSIVE DATA STORE CONTENT LOGGING
+                        print(f"\n📊 AUDIT - COMPLETE DATA STORE CONTENT:")
+                        print(f"   📋 Raw Result Data Type: {type(selected_data['result_data'])}")
+                        print(f"   📏 Character Count: {len(str(selected_data['result_data']))}")
+                        print(f"   🔤 First 200 chars: '{str(selected_data['result_data'])[:200]}'")
+                        print(f"   🔤 Last 100 chars: '{str(selected_data['result_data'])[-100:]}'")
+                        
+                        # Show line-by-line breakdown
+                        if isinstance(selected_data['result_data'], str):
+                            lines = selected_data['result_data'].split('\n')
+                            print(f"   📄 Total lines: {len(lines)}")
+                            print(f"   📝 Line-by-line preview:")
+                            for i, line in enumerate(lines[:10], 1):  # Show first 10 lines
+                                if line.strip():  # Only show non-empty lines
+                                    print(f"      [{i:2d}] '{line}'")
+                            if len(lines) > 10:
+                                print(f"      ... and {len(lines) - 10} more lines")
+                        
+                        # Show metadata
+                        print(f"   🏷️ Metadata: {selected_data.get('metadata', {})}")
+                        print(f"   🕐 Storage timestamp: {selected_data['timestamp']}")
+                        print(f"   🔍 Query type: {selected_data['query_type']}")
+                        
+                        # 🔧 ENHANCED: Data type-specific parsing
                         try:
                             result_data = selected_data['result_data']
                             
@@ -1155,12 +1306,57 @@ Displaying raw data instead."""
                             print(f"   📏 Data length: {len(str(result_data))}")
                             print(f"   📋 First 300 chars: {str(result_data)[:300]}...")
                             
-                            # 📊 INTELLIGENT GENERIC DATA PARSING
-                            print(f"🔄 AUDIT - STARTING GENERIC DATA PARSING:")
-                            data_points = self._parse_vector_search_data(result_data)
+                            # 📊 DATA TYPE-SPECIFIC PARSING
+                            if data_type == "forecast":
+                                print(f"🔄 AUDIT - STARTING FORECAST DATA PARSING:")
+                                data_points = self._parse_vector_search_data(result_data)
+                                
+                                if data_points:
+                                    # Create JSON for forecast visualization
+                                    viz_data = {
+                                        "data_type": "forecast",
+                                        "business": selected_data['business'],
+                                        "substream": selected_data['substream'],
+                                        "team": selected_data['team'],
+                                        "forecast_data": data_points
+                                    }
+                                else:
+                                    print("⚠️ AUDIT - NO FORECAST DATA POINTS EXTRACTED")
+                                    
+                            elif data_type == "kpi":
+                                print(f"🔄 AUDIT - STARTING KPI DATA PARSING:")
+                                
+                                # Handle KPI data format
+                                if isinstance(result_data, dict) and 'kpi_results' in result_data:
+                                    kpi_results = result_data['kpi_results']
+                                    print(f"📊 Found {len(kpi_results)} KPI results")
+                                    
+                                    # Convert KPI results to chart-friendly format
+                                    chart_data = []
+                                    for kpi in kpi_results:
+                                        chart_data.append({
+                                            "metric": kpi['kpi'],
+                                            "value": kpi['value'],
+                                            "department": kpi['department'],
+                                            "date": kpi['date']
+                                        })
+                                    
+                                    viz_data = {
+                                        "data_type": "kpi",
+                                        "kpi_data": chart_data,
+                                        "departments": list(set([kpi['department'] for kpi in kpi_results])),
+                                        "title": "KPI Performance Dashboard"
+                                    }
+                                    data_points = chart_data  # For success check
+                                else:
+                                    print("⚠️ AUDIT - KPI data format not recognized")
+                                    data_points = []
+                            else:
+                                print(f"⚠️ AUDIT - Unknown data type: {data_type}")
+                                data_points = []
                             
                             print(f"📊 AUDIT - PARSING RESULTS:")
-                            print(f"   🎯 Total data points extracted: {len(data_points)}")
+                            print(f"   🎯 Total data points extracted: {len(data_points) if data_points else 0}")
                             
                             if data_points:
                                 # Log sample of extracted data points
@@ -1168,18 +1364,13 @@ Displaying raw data instead."""
                                 print(f"   📋 Sample extracted points:")
                                 for i in range(sample_size):
                                     point = data_points[i]
-                                    print(f"      [{i+1}] {point.get('date', 'NO_DATE')} = {point.get('value', 'NO_VALUE')}")
+                                    if data_type == "forecast":
+                                        print(f"      [{i+1}] {point.get('date', 'NO_DATE')} = {point.get('value', 'NO_VALUE')}")
+                                    elif data_type == "kpi":
+                                        print(f"      [{i+1}] {point.get('metric', 'NO_METRIC')}: {point.get('value', 'NO_VALUE')}% ({point.get('department', 'NO_DEPT')})")
                                 
                                 if len(data_points) > sample_size:
                                     print(f"      ... and {len(data_points) - sample_size} more points")
-                                
-                                # Create JSON for visualization
-                                viz_data = {
-                                    "business": selected_data['business'],
-                                    "substream": selected_data['substream'],
-                                    "team": selected_data['team'],
-                                    "forecast_data": data_points
-                                }
                                 
                                 import json
                                 json_data = json.dumps(viz_data)
@@ -2007,44 +2198,62 @@ Just tell me what you'd like to do! For example, you could ask:
             # 🔍 Fallback: Look for date-value patterns in text
             print("🔍 AUDIT - Trying fallback date-value patterns...")
             patterns = [
+                r'\*\s*\*\*([A-Za-z]+\s+\d{4})\*\*:\s*(\d{3,})',  # **Month YYYY**: value
                 r'(\d{4}-\d{2}-\d{2})[:\s]+(\d{3,})',  # Date: value (3+ digits to avoid years)
                 r'(\d{4}/\d{2}/\d{2})[:\s]+(\d{3,})',  # Date/value format
-                r'([A-Za-z]{3}\s+\d{4})[:\s]+(\d{3,})',  # Month Year: value
+                r'([A-Za-z]{3,}\s+\d{4})[:\s]+(\d{3,})',  # Month Year: value (extended for full month names)
             ]
             
-            for i, pattern in enumerate(patterns):
+            pattern_names = [
+                "**Month YYYY**: value",
+                "YYYY-MM-DD: value", 
+                "YYYY/MM/DD: value",
+                "Month YYYY: value"
+            ]
+            
+            for i, (pattern, pattern_name) in enumerate(zip(patterns, pattern_names)):
+                print(f"🔍 AUDIT - Testing Pattern {i+1}: {pattern_name}")
+                print(f"    🔤 Regex: {pattern}")
                 matches = re.findall(pattern, data)
-                print(f"🔍 AUDIT - Pattern {i+1} found {len(matches)} matches")
+                print(f"    📊 Raw matches found: {len(matches)}")
+                
+                if matches:
+                    print(f"    📋 Sample matches (first 3):")
+                    for j, match in enumerate(matches[:3], 1):
+                        print(f"        [{j}] {match}")
+                
+                valid_extractions = 0
                 for match in matches:
                     try:
                         date = match[0]
                         value = int(match[1])
                         if value > 1000:  # Filter out years/small numbers
                             data_points.append({"date": date, "value": value})
-                            print(f"📊 AUDIT - Pattern {i+1} extracted: {date} = {value}")
-                    except (ValueError, IndexError):
+                            print(f"    ✅ AUDIT - Pattern {i+1} extracted: {date} = {value}")
+                            valid_extractions += 1
+                        else:
+                            print(f"    ⚠️ AUDIT - Pattern {i+1} skipped small value: {value}")
+                    except (ValueError, IndexError) as e:
+                        print(f"    ❌ AUDIT - Pattern {i+1} failed to parse: {e}")
                         continue
+                
+                print(f"    📊 Valid extractions from this pattern: {valid_extractions}")
+                print(f"    📈 Total data points so far: {len(data_points)}")
+                
+                # If we found data with this pattern, report success
+                if valid_extractions > 0:
+                    print(f"🎯 AUDIT - SUCCESS with Pattern {i+1}: {pattern_name}")
             
-            # 🔍 Enhanced: Look for any number patterns > 1000 near dates
-            if not data_points:
-                print("🔍 AUDIT - Trying enhanced number extraction...")
-                lines = data.split('\n')
-                for line in lines:
-                    if re.search(r'\d{4}-\d{2}-\d{2}', line):
-                        # Found a line with a date, look for large numbers
-                        date_match = re.search(r'\d{4}-\d{2}-\d{2}', line)
-                        number_matches = re.findall(r'\b(\d{4,})\b', line)  # 4+ digits to avoid years
-                        
-                        if date_match and number_matches:
-                            date = date_match.group()
-                            # Take the largest number (likely the forecast value)
-                            values = [int(n) for n in number_matches if int(n) > 1000]
-                            if values:
-                                value = max(values)
-                                data_points.append({"date": date, "value": value})
-                                print(f"📊 AUDIT - Enhanced extraction: {date} = {value}")
+            print(f"\n📊 AUDIT - PATTERN TESTING SUMMARY:")
+            print(f"   🔍 Patterns tested: {len(patterns)}")
+            print(f"   📈 Total data points extracted: {len(data_points)}")
+            if data_points:
+                print(f"   🏆 Sample extracted data:")
+                for i, point in enumerate(data_points[:3], 1):
+                    print(f"      [{i}] {point['date']}: {point['value']}")
+                if len(data_points) > 3:
+                    print(f"      ... and {len(data_points) - 3} more points")
             
-            print(f"✅ AUDIT - Text parsing final result: {len(data_points)} points")
             return data_points
             
         except Exception as e:
@@ -2104,9 +2313,26 @@ Ready to assist with your workforce management needs! 🎯
 async def main(message: cl.Message):
     """Main message handler - Teams optimized"""
     try:
+        # 🔥 RAW MESSAGE INPUT LOGGING
+        print(f"\n🔥 RAW USER MESSAGE - COMPLETE INPUT DUMP:")
+        print(f"📝 Message Type: {type(message)}")
+        print(f"📦 Message Content Length: {len(message.content) if message.content else 0}")
+        print(f"🔥 RAW COMPLETE MESSAGE:")
+        print(f"{'='*60}")
+        print(f"CONTENT: {message.content}")
+        if hasattr(message, 'elements') and message.elements:
+            print(f"ELEMENTS: {message.elements}")
+        if hasattr(message, 'metadata') and message.metadata:
+            print(f"METADATA: {message.metadata}")
+        print(f"{'='*60}")
+        
         # Get Teams session info
         session_id = cl.user_session.get('teams_session_id')
         teams_user = cl.user_session.get("user")
+        
+        print(f"🔥 RAW SESSION INFO:")
+        print(f"   🆔 Session ID: {session_id}")
+        print(f"   👤 Teams User: {teams_user}")
         
         if not session_id:
             # Create session if not exists
@@ -2114,12 +2340,17 @@ async def main(message: cl.Message):
             session_data = teams_session_manager.get_or_create_session(session_id, teams_user)
             cl.user_session.set('teams_session_id', session_id)
             cl.user_session.set('teams_session_data', session_data)
+            print(f"🔥 RAW SESSION CREATED: {session_id}")
         
-        print(f"\n📨 Processing Teams message for session: {session_id}")
+        print(f"📨 Processing Teams message for session: {session_id}")
         user_input = message.content.strip()
+        
+        print(f"🔥 RAW USER INPUT (STRIPPED): '{user_input}'")
+        print(f"🔥 RAW INPUT LENGTH: {len(user_input)} characters")
         
         # Handle special commands
         if user_input.lower() in ["end", "reset", "quit", "exit"]:
+            print(f"🔥 RAW SPECIAL COMMAND: {user_input.lower()}")
             context_manager = get_session_context_manager(session_id)
             context_manager.clear(session_id)
             
@@ -2163,10 +2394,86 @@ async def main(message: cl.Message):
             except Exception as e:
                 print(f"⚠️ Error clearing vector data store: {e}")
             
+            # 🤖 CRITICAL FIX: Clear agent conversation memory
+            try:
+                session_data = teams_session_manager.sessions.get(session_id, {})
+                if session_data.get("agents"):
+                    print(f"🧠 Clearing agent conversation memory...")
+                    for agent in session_data["agents"]:
+                        # Clear autogen agent's internal conversation history
+                        if hasattr(agent, '_oai_messages'):
+                            agent._oai_messages.clear()
+                            print(f"  ✅ Cleared {agent.name} conversation history")
+                        if hasattr(agent, 'chat_messages'):
+                            agent.chat_messages.clear()
+                            print(f"  ✅ Cleared {agent.name} chat messages")
+                        if hasattr(agent, '_conversation_cache'):
+                            agent._conversation_cache.clear()
+                            print(f"  ✅ Cleared {agent.name} conversation cache")
+                        
+                        # 🔧 ENHANCED: Clear additional agent memory attributes
+                        if hasattr(agent, '_messages'):
+                            agent._messages.clear()
+                            print(f"  ✅ Cleared {agent.name} _messages")
+                        if hasattr(agent, 'message_history'):
+                            agent.message_history.clear()
+                            print(f"  ✅ Cleared {agent.name} message_history")
+                        if hasattr(agent, '_last_message'):
+                            agent._last_message = None
+                            print(f"  ✅ Cleared {agent.name} _last_message")
+                        if hasattr(agent, '_context'):
+                            agent._context = {}
+                            print(f"  ✅ Cleared {agent.name} _context")
+                        if hasattr(agent, '_previous_responses'):
+                            agent._previous_responses.clear()
+                            print(f"  ✅ Cleared {agent.name} _previous_responses")
+                    
+                    # Force recreation of agents on next request
+                    session_data["agents"] = None
+                    print(f"🔄 Agents will be recreated fresh on next request")
+                else:
+                    print(f"ℹ️ No agents to clear for session: {session_id}")
+                    
+                # 🔧 CRITICAL: Also clear the session context data completely
+                session_data["context"] = {
+                    "teams": [],
+                    "last_query": None,
+                    "current_comparison": None,
+                    "visualizations": []
+                }
+                print(f"🧹 Reset session context data")
+                
+                # 🔧 CRITICAL: Clear the entire session data (except user info)
+                user_info = session_data.get('user')
+                created_at = session_data.get('created_at')
+                session_data.clear()
+                session_data.update({
+                    "user": user_info,
+                    "created_at": created_at,
+                    "last_active": datetime.now(),
+                    "context": {
+                        "teams": [],
+                        "last_query": None,
+                        "current_comparison": None,
+                        "visualizations": []
+                    },
+                    "agents": None,
+                    "context_manager": None,
+                    "chroma_client": None,
+                    "is_new": False
+                })
+                print(f"🧹 Complete session data reset (preserved user and creation time)")
+                
+            except Exception as e:
+                print(f"⚠️ Error clearing agent memory: {e}")
+                import traceback
+                print(f"⚠️ Agent clear traceback: {traceback.format_exc()}")
+            
             await cl.Message(content="🔄 **Session reset!** Context and data stores cleared. Ready for new queries.").send()
             return
         
         elif user_input.lower() == "help":
+            print(f"🔥 RAW HELP COMMAND")
             help_msg = """
 📚 **Workforce Management Commands**
 
@@ -2196,6 +2503,7 @@ async def main(message: cl.Message):
             return
             
         elif user_input.lower() == "status":
+            print(f"🔥 RAW STATUS COMMAND")
             session_data = cl.user_session.get('teams_session_data', {})
             user_info = session_data.get('user', {})
             
@@ -2234,8 +2542,12 @@ async def main(message: cl.Message):
             await cl.Message(content=status_msg).send()
             return
         
+        print(f"🔥 RAW PROCESSING - Regular user query detected")
+        
         # Get or create agents for this session (prevents re-instantiation)
         agents = get_session_agents(session_id)
+        
+        print(f"🔥 RAW AGENTS: {[agent.name for agent in agents] if agents else 'None'}")
         
         # 📊 ENSURE DATA STORE CONTEXT IS ALIGNED WITH SESSION
         # This is critical - both context manager and vector data store must use same session ID
@@ -2251,6 +2563,11 @@ async def main(message: cl.Message):
         
         # Create group chat with session agents
         group_chat = GroupChat(agents, user_agent, session_id)
+        
+        print(f"🔥 RAW ORCHESTRATION - Starting group chat with user input:")
+        print(f"   📝 Input: {user_input}")
+        print(f"   🎭 Agents: {len(agents)} agents available")
+        print(f"   🆔 Session: {session_id}")
         
         # Run the chat
         await group_chat.run_chat(user_input)

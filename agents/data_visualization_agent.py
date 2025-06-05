@@ -17,13 +17,48 @@ def create_visualization(data_str: str) -> Dict:
     Ultra-robust visualization function that ALWAYS works and returns cl.Plotly compatible format
     """
     try:
-        print(f"\n🎨 ROBUST VIZ - Processing: {data_str[:200]}...")
+        # 🔥 RAW DATA LOGGING - COMPLETE INPUT DUMP
+        print(f"\n🎨 RAW VIZ DATA - COMPLETE INPUT DUMP:")
+        print(f"📝 Input Type: {type(data_str)}")
+        print(f"📦 Input Size: {len(str(data_str))} characters")
+        print(f"🔥 RAW COMPLETE DATA:")
+        print(f"{'='*50}")
+        print(str(data_str))
+        print(f"{'='*50}")
+        
+        if isinstance(data_str, dict):
+            print(f"📊 DICT RAW STRUCTURE:")
+            for key, value in data_str.items():
+                print(f"   🔑 [{key}] ({type(value)}): {str(value)[:200]}{'...' if len(str(value)) > 200 else ''}")
+        elif isinstance(data_str, list):
+            print(f"📋 LIST RAW STRUCTURE:")
+            for i, item in enumerate(data_str[:5]):
+                print(f"   🔢 [{i}] ({type(item)}): {str(item)[:200]}{'...' if len(str(item)) > 200 else ''}")
+        
+        print(f"🎨 ROBUST VIZ - Processing: {str(data_str)[:200]}...")
         
         # Step 1: Always try to extract SOMETHING meaningful
         parsed_data = smart_parse_any_format(data_str)
         
+        # 🔥 RAW PARSED DATA LOGGING
+        print(f"🔥 RAW PARSED DATA OUTPUT:")
+        print(f"📝 Parsed Type: {type(parsed_data)}")
+        if isinstance(parsed_data, dict):
+            for key, value in parsed_data.items():
+                print(f"   🔑 [{key}] ({type(value)}): {str(value)[:200]}{'...' if len(str(value)) > 200 else ''}")
+        
         # Step 2: Create Plotly specification no matter what
         plotly_spec = create_bulletproof_plotly_spec(parsed_data)
+        
+        # 🔥 RAW PLOTLY SPEC LOGGING
+        print(f"🔥 RAW PLOTLY SPEC OUTPUT:")
+        print(f"📊 Spec Keys: {list(plotly_spec.keys()) if isinstance(plotly_spec, dict) else 'Not a dict'}")
+        if 'data' in plotly_spec:
+            print(f"📈 Data Traces: {len(plotly_spec['data'])}")
+            for i, trace in enumerate(plotly_spec['data'][:3]):
+                print(f"   📋 Trace [{i}]:")
+                for key, value in trace.items():
+                    print(f"      🔑 [{key}]: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
         
         # Step 3: Always return proper format for cl.Plotly
         result = {

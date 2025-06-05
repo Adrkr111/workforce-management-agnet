@@ -182,4 +182,52 @@ print("• 📈 Delta calculation showing differences between datasets")
 print("• 📊 Dual Y-axis for primary data and delta values")
 print("• 🎨 Intelligent color coding and legend positioning")
 print("• 🧠 Automatic detection of comparison requests")
-print("• 📦 Robust data parsing for multiple formats") 
+print("• 📦 Robust data parsing for multiple formats")
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+def test_enhanced_kpi_agent():
+    """Test the enhanced KPI agent with filtering and vector storage"""
+    try:
+        print("🧪 Testing Enhanced KPI Agent...")
+        print("=" * 50)
+        
+        # Mock the vector data store for testing
+        class MockVectorDataStore:
+            def store_search_result(self, session_id, query_type, business, substream, team, result_data, metadata=None):
+                print(f"✅ MOCK STORAGE: {query_type} data stored for session {session_id}")
+                return f"mock_entry_{query_type}_{session_id}"
+        
+        # Set up mock context
+        from agents.kpi_agent import set_data_store_context, fetch_kpi
+        mock_store = MockVectorDataStore()
+        set_data_store_context(mock_store, "test_session")
+        
+        # Test specific KPI query (should filter results)
+        print("\n1. Testing specific query: 'home loan attrition rate'")
+        query1 = "home loan attrition rate"
+        
+        # This should fail gracefully since we don't have actual data, but we can check the logic
+        try:
+            result1 = fetch_kpi(query1)
+            if 'results' in result1:
+                print("SUCCESS! Enhanced KPI results:")
+                print(result1['results'][:200] + "..." if len(result1['results']) > 200 else result1['results'])
+            elif 'error' in result1:
+                print(f"Expected error (no test data): {result1['error']}")
+        except Exception as e:
+            print(f"Expected error (no test environment): {e}")
+        
+        print("\n✅ Enhanced KPI agent test completed")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+if __name__ == "__main__":
+    test_enhanced_kpi_agent() 

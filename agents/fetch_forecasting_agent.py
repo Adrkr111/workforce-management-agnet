@@ -18,7 +18,13 @@ def set_data_store_context(data_store, session_id):
 # -- Fetch forecast function used by agent --
 def fetch_forecast(args):
     """Fetch forecast data based on business type, substream, and team"""
-    print(f"Debug - Processing forecast request with args: {args}")
+    print(f"🔥 RAW INPUT - Processing forecast request:")
+    print(f"📝 Args Type: {type(args)}")
+    print(f"📦 Args Size: {len(str(args))} characters")
+    print(f"🔥 RAW COMPLETE ARGS:")
+    print(f"{'='*50}")
+    print(str(args))
+    print(f"{'='*50}")
     
     try:
         # ✅ ENHANCED ARGUMENT PARSING - Handle both dict and string inputs
@@ -29,15 +35,17 @@ def fetch_forecast(args):
         
         # NEW: Handle dictionary input from agents
         if isinstance(args, dict):
-            print("Debug - Processing dictionary arguments")
+            print("🔥 RAW DICT PROCESSING - Complete breakdown:")
+            for key, value in args.items():
+                print(f"   🔑 [{key}]: {value}")
             business_type = args.get('business') or args.get('business_type')
             substream_type = args.get('substream') or args.get('substream_type') or args.get('stream')
             team_name = args.get('team') or args.get('team_name')
-            print(f"Debug - Dict format: business={business_type}, substream={substream_type}, team={team_name}")
+            print(f"🔥 RAW EXTRACTED: business={business_type}, substream={substream_type}, team={team_name}")
         
         # EXISTING: Handle string input (backward compatibility)
         elif isinstance(args, str):
-            print("Debug - Processing string arguments")
+            print("🔥 RAW STRING PROCESSING")
             original_user_request = args  # Store original for conversational agent
             
             # Convert to lowercase for easier parsing
@@ -49,7 +57,7 @@ def fetch_forecast(args):
                 business_type = parts[0].replace('business-', '')
                 substream_type = parts[1].replace('substream-', '')
                 team_name = parts[2].replace('team-', '')
-                print(f"Debug - Used simple format: business={business_type}, substream={substream_type}, team={team_name}")
+                print(f"🔥 RAW SIMPLE FORMAT: business={business_type}, substream={substream_type}, team={team_name}")
             else:
                 # Method 2: Parse natural language format
                 import re
@@ -93,7 +101,7 @@ def fetch_forecast(args):
                         team_name = match.group(1)
                         break
                 
-                print(f"Debug - Natural language parsing: business={business_type}, substream={substream_type}, team={team_name}")
+                print(f"🔥 RAW NLP PARSING: business={business_type}, substream={substream_type}, team={team_name}")
         
         else:
             return f'Invalid argument type: {type(args)}. Expected string or dictionary.'
@@ -110,7 +118,7 @@ def fetch_forecast(args):
             
             return f'I need more details to find the right forecast. Please specify: {", ".join(missing)}.\n\nExample: "Get forecast for business logistics, substream dlt, team support"'
         
-        print(f"Debug - Final parameters: business={business_type}, substream={substream_type}, team={team_name}")
+        print(f"🔥 RAW FINAL PARAMS: business={business_type}, substream={substream_type}, team={team_name}")
         
         # Get ChromaDB client and collection
         client = get_chroma_client()
@@ -118,15 +126,32 @@ def fetch_forecast(args):
         
         # Get embedding for the query
         query = f"work volume forecast for {business_type} {substream_type} {team_name}"
-        print("Debug - Getting query embedding...")
+        print("🔥 RAW QUERY STRING:", query)
+        print("🔥 RAW DATABASE - Getting query embedding...")
         query_embedding = get_gemini_embedding(query)
+        print(f"🔥 RAW EMBEDDING LENGTH: {len(query_embedding) if query_embedding else 'None'}")
         
-        print("Debug - Querying vector database...")
+        print("🔥 RAW DATABASE - Querying vector database...")
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=3,
             include=["documents", "metadatas", "distances"]
         )
+        
+        # 🔥 RAW VECTOR DATABASE RESULTS DUMP
+        print(f"🔥 RAW VECTOR DB RESULTS - COMPLETE DUMP:")
+        print(f"📝 Results Type: {type(results)}")
+        print(f"🔑 Results Keys: {list(results.keys()) if isinstance(results, dict) else 'Not a dict'}")
+        
+        if results and isinstance(results, dict):
+            for key, value in results.items():
+                print(f"🔥 RAW VECTOR [{key}]:")
+                if isinstance(value, list) and value:
+                    print(f"   📊 Length: {len(value)}")
+                    for i, item in enumerate(value[:2]):  # Show first 2 items
+                        print(f"   📋 Item [{i}]: {str(item)[:300]}{'...' if len(str(item)) > 300 else ''}")
+                else:
+                    print(f"   📝 Value: {str(value)[:200]}{'...' if len(str(value)) > 200 else ''}")
         
         if not results or not results.get('documents') or not results['documents'][0]:
             return f'I couldn\'t find any forecast data for the {business_type} {team_name} team in {substream_type}. Would you like to try a different combination?'
@@ -139,15 +164,23 @@ def fetch_forecast(args):
             results['distances'][0]
         )):
             confidence = 1 - distance
-            raw_results.append({
+            raw_result = {
                 'document': doc,
                 'metadata': metadata,
                 'confidence': confidence,
                 'rank': i + 1
-            })
+            }
+            raw_results.append(raw_result)
+            
+            # 🔥 RAW RESULT DUMP
+            print(f"🔥 RAW RESULT [{i+1}]:")
+            print(f"   📊 Confidence: {confidence:.3f}")
+            print(f"   📊 Distance: {distance:.3f}")
+            print(f"   📄 Document: {str(doc)[:400]}{'...' if len(str(doc)) > 400 else ''}")
+            print(f"   🏷️ Metadata: {metadata}")
         
         # 🤖 INTELLIGENT CONVERSATIONAL PROCESSING AGENT
-        print("Debug - Processing results with intelligent agent...")
+        print("🔥 RAW PROCESSING - Creating intelligent agent...")
         
         # Create intelligent processing agent
         processing_agent = ConversableAgent(
@@ -202,11 +235,25 @@ VECTOR SEARCH RESULTS ({len(raw_results)} matches):
         results_context += f"""
 TASK: Process these results according to the user's original request. Apply any formatting requirements (table, summary, etc.) and filter for the most relevant data. Return ONLY the formatted output - no explanatory text."""
         
+        # 🔥 RAW AGENT CONTEXT DUMP
+        print(f"🔥 RAW AGENT CONTEXT:")
+        print(f"{'='*50}")
+        print(results_context)
+        print(f"{'='*50}")
+        
         # Get intelligent processing
         try:
             response = processing_agent.generate_reply(
                 messages=[{"role": "user", "content": results_context}]
             )
+            
+            # 🔥 RAW AGENT RESPONSE DUMP
+            print(f"🔥 RAW AGENT RESPONSE:")
+            print(f"📝 Response Type: {type(response)}")
+            print(f"📄 Response Content:")
+            print(f"{'='*50}")
+            print(str(response))
+            print(f"{'='*50}")
             
             if isinstance(response, dict) and 'content' in response:
                 processed_content = response['content']
@@ -215,7 +262,8 @@ TASK: Process these results according to the user's original request. Apply any 
             else:
                 processed_content = str(response)
             
-            print(f"Debug - Processed response: {processed_content[:200]}...")
+            print(f"🔥 RAW PROCESSED CONTENT:")
+            print(f"📄 Final Content: {processed_content[:400]}{'...' if len(processed_content) > 400 else ''}")
             
             # 📊 STORE IN VECTOR DATA STORE FOR VISUALIZATION ACCESS
             if _vector_data_store and _current_session_id:
@@ -245,7 +293,7 @@ TASK: Process these results according to the user's original request. Apply any 
             return processed_content
             
         except Exception as e:
-            print(f"Debug - Processing agent error: {str(e)}")
+            print(f"🔥 RAW PROCESSING ERROR: {str(e)}")
             # Fallback to simple processing if agent fails
             best_match = min(raw_results, key=lambda x: x['rank'])
             return f"""📊 {business_type.upper()} {substream_type.upper()} {team_name.upper()} TEAM FORECAST
@@ -255,7 +303,7 @@ TASK: Process these results according to the user's original request. Apply any 
 Confidence: {best_match['confidence']:.1%}"""
             
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"🔥 RAW ERROR: {str(e)}")
         return f'I encountered an issue while fetching the forecast data: {str(e)}. Would you like to try again?'
 
 def create_agent():

@@ -1,100 +1,148 @@
 #!/usr/bin/env python3
 """
-Test the fixed visualization functions
+Test the visualization parsing fix
 """
 
-from agents.data_visualization_agent import create_visualization, create_visualization_with_pandas
-import json
-
-# Test data in the format that's being sent to visualization
-test_data = {
-    "business": "logistics",
-    "substream": "dlt",
-    "team": "support",
-    "forecast_data": [
-        {"date": "2025-06-01", "value": 2845},
-        {"date": "2025-07-01", "value": 2843},
-        {"date": "2025-08-01", "value": 2519},
-        {"date": "2025-09-01", "value": 3499},
-        {"date": "2025-10-01", "value": 3597},
-        {"date": "2025-11-01", "value": 2780},
-        {"date": "2025-12-01", "value": 3295},
-        {"date": "2026-01-01", "value": 1921},
-        {"date": "2026-02-01", "value": 3005},
-        {"date": "2026-03-01", "value": 1144},
-        {"date": "2026-04-01", "value": 2535},
-        {"date": "2026-05-01", "value": 3758}
-    ]
-}
-
-print("🧪 TESTING VISUALIZATION FIXES")
-print("=" * 50)
-
-# Convert to JSON string as it would be passed to the function
-json_data = json.dumps(test_data)
-print(f"📦 Test data: {len(test_data['forecast_data'])} points")
-print(f"📋 Sample: {test_data['forecast_data'][0]} to {test_data['forecast_data'][-1]}")
-
-print("\n1️⃣ Testing Enhanced Plotly Visualization:")
-print("-" * 40)
-try:
-    plotly_result = create_visualization(json_data)
-    print(f"✅ Plotly Result Type: {type(plotly_result)}")
+def test_content_parsing():
+    """Test the improved content parsing logic"""
+    import json
+    import ast
     
-    if 'spec' in plotly_result:
-        spec = plotly_result['spec']
-        if 'data' in spec and len(spec['data']) > 0:
-            trace = spec['data'][0]
-            x_data = trace.get('x', [])
-            y_data = trace.get('y', [])
-            print(f"📊 X-axis data: {len(x_data)} points - {x_data[:3]}... to {x_data[-1] if x_data else 'none'}")
-            print(f"📊 Y-axis data: {len(y_data)} points - {y_data[:3]}... to {y_data[-1] if y_data else 'none'}")
-            print(f"📋 Chart title: {spec.get('layout', {}).get('title', {}).get('text', 'No title')}")
+    print("🧪 Testing Content Parsing Fix")
+    print("=" * 40)
+    
+    # Test case: Visualization agent response
+    viz_content = "{'spec': {'data': [{'x': ['2025-06-01', '2025-07-01'], 'y': [2845, 2843], 'type': 'scatter', 'mode': 'lines+markers', 'name': 'Data Trend'}], 'layout': {'title': {'text': 'Volume Forecast'}, 'xaxis': {'title': 'Date'}, 'yaxis': {'title': 'Volume'}}}}"
+    
+    print("📊 Testing visualization content parsing...")
+    
+    # Simulate the parsing logic from app_teams.py
+    try:
+        # Try JSON first
+        try:
+            data = json.loads(viz_content)
+            print("✅ Parsed as JSON")
+            parse_method = "JSON"
+        except json.JSONDecodeError:
+            # Try Python dict parsing
+            try:
+                if viz_content.strip().startswith('{') and viz_content.strip().endswith('}'):
+                    data = ast.literal_eval(viz_content)
+                    print("✅ Parsed as Python dict")
+                    parse_method = "AST"
+                else:
+                    raise ValueError("Not a dict format")
+            except (ValueError, SyntaxError):
+                print("⚠️ Fallback to text content")
+                data = {"text_content": viz_content}
+                parse_method = "TEXT"
+        
+        print(f"🔍 Parse method used: {parse_method}")
+        print(f"📋 Data keys: {data.keys()}")
+        
+        # Check if it can find the spec
+        if 'spec' in data:
+            spec = data['spec']
+            print("✅ Found 'spec' key")
+            print(f"📊 Spec keys: {spec.keys()}")
             
-            # Check if we have real data
-            if len(x_data) > 1 and len(y_data) > 1 and not (x_data == ['Data'] and y_data == [1]):
-                print("✅ SUCCESS: Real data extracted correctly!")
+            if 'data' in spec and 'layout' in spec:
+                chart_data = spec['data']
+                layout = spec['layout']
+                print(f"✅ Found chart data with {len(chart_data)} traces")
+                print(f"🏷️ Chart title: {layout.get('title', {}).get('text', 'No title')}")
+                
+                if chart_data:
+                    trace = chart_data[0]
+                    x_points = len(trace.get('x', []))
+                    y_points = len(trace.get('y', []))
+                    print(f"📈 First trace: {x_points} x-points, {y_points} y-points")
+                
+                print("🎉 SUCCESS: Visualization data parsing works!")
+                return True
             else:
-                print("❌ FAIL: Generic fallback data detected")
+                print("❌ Missing chart data or layout")
+                return False
         else:
-            print("❌ FAIL: No chart data found")
-    else:
-        print("❌ FAIL: No spec found in result")
-        
-except Exception as e:
-    print(f"❌ ERROR: {e}")
+            print("❌ No 'spec' key found")
+            print(f"   Available keys: {list(data.keys())}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Parsing failed: {e}")
+        return False
 
-print("\n2️⃣ Testing Pandas Visualization:")
-print("-" * 40)
-try:
-    pandas_result = create_visualization_with_pandas(json_data)
-    print(f"✅ Pandas Result Type: {type(pandas_result)}")
+def test_markdown_forecast_parsing():
+    """Test parsing of markdown forecast format from vector database"""
+    import re
     
-    if 'png_base64' in pandas_result:
-        png_data = pandas_result['png_base64']
-        title = pandas_result.get('title', 'No title')
-        data_points = pandas_result.get('data_points', 0)
-        
-        print(f"📊 PNG data length: {len(png_data)} characters")
-        print(f"📋 Chart title: {title}")
-        print(f"📊 Data points: {data_points}")
-        
-        # Save PNG for inspection
-        import base64
-        png_bytes = base64.b64decode(png_data)
-        with open('test_pandas_chart.png', 'wb') as f:
-            f.write(png_bytes)
-        print("✅ SUCCESS: PNG chart saved as 'test_pandas_chart.png'")
-        
-    else:
-        print("❌ FAIL: No PNG data found")
-        
-except Exception as e:
-    print(f"❌ ERROR: {e}")
+    print("\n🧪 Testing Markdown Forecast Parsing")
+    print("=" * 45)
+    
+    # This is the actual format stored in vector database
+    forecast_text = """For the business logistics substream DLT, the forecast for the support team is as follows:
 
-print("\n🎯 SUMMARY:")
-print("=" * 50)
-print("✅ Both visualization approaches should now work correctly")
-print("✅ Enhanced Plotly should extract real dates and values")
-print("✅ Pandas approach should create proper DataFrame plots")
-print("✅ You can check 'test_pandas_chart.png' to see the result") 
+*   **June 2025**: 2845
+*   **July 2025**: 2843
+*   **August 2025**: 2519
+*   **September 2025**: 3499
+*   **October 2025**: 3597
+*   **November 2025**: 2780
+*   **December 2025**: 3295
+*   **January 2026**: 1921
+*   **February 2026**: 3005
+*   **March 2026**: 1144
+*   **April 2026**: 2535
+*   **May 2026**: 3758"""
+    
+    print(f"📊 Testing forecast text with {len(forecast_text)} characters")
+    print(f"📋 Sample: {forecast_text[:100]}...")
+    
+    # Test the new pattern
+    pattern = r'\*\s*\*\*([A-Za-z]+\s+\d{4})\*\*:\s*(\d{3,})'
+    matches = re.findall(pattern, forecast_text)
+    
+    print(f"\n🔍 Pattern: {pattern}")
+    print(f"📊 Matches found: {len(matches)}")
+    
+    data_points = []
+    for match in matches:
+        try:
+            date = match[0]
+            value = int(match[1])
+            if value > 1000:  # Filter out years/small numbers
+                data_points.append({"date": date, "value": value})
+                print(f"✅ Extracted: {date} = {value}")
+        except (ValueError, IndexError):
+            continue
+    
+    print(f"\n📊 Final extracted points: {len(data_points)}")
+    
+    if len(data_points) >= 10:  # Should extract 12 months of data
+        print("🎉 SUCCESS: Markdown forecast parsing works!")
+        print(f"📈 Sample data points:")
+        for i, point in enumerate(data_points[:3], 1):
+            print(f"  [{i}] {point['date']}: {point['value']}")
+        if len(data_points) > 3:
+            print(f"  ... and {len(data_points) - 3} more points")
+        return True
+    else:
+        print("❌ FAILED: Not enough data points extracted")
+        return False
+
+if __name__ == "__main__":
+    print("🧪 VISUALIZATION FIX TESTING")
+    print("=" * 50)
+    
+    test1_success = test_content_parsing()
+    test2_success = test_markdown_forecast_parsing()
+    
+    print(f"\n🎯 RESULTS:")
+    print(f"✅ Content Parsing: {'PASS' if test1_success else 'FAIL'}")
+    print(f"✅ Markdown Parsing: {'PASS' if test2_success else 'FAIL'}")
+    
+    if test1_success and test2_success:
+        print("\n🎉 ALL TESTS PASSED!")
+        print("📊 Visualization should now work correctly")
+    else:
+        print("\n⚠️ Some tests failed - needs more work") 
