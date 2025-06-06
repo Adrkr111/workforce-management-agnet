@@ -2281,7 +2281,7 @@ async def on_chat_start():
     
     # Only send welcome message for NEW sessions (check the is_new flag)
     if session_data.get('is_new', False):
-        welcome_msg = f"""🚀 **Enterprise Workforce Management Agent System**
+        welcome_msg = f"""🚀 **AI-Analyst**
 
 📱 Welcome to Teams integration!
 🆔 Session ID: `{session_id}`
