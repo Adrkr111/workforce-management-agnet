@@ -6,6 +6,7 @@ import re
 from typing import Dict, List, Union, Any
 from datetime import datetime
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -14,11 +15,11 @@ import base64
 
 def create_visualization(data_str: str) -> Dict:
     """
-    Ultra-robust visualization function that ALWAYS works and returns cl.Plotly compatible format
+    UNIVERSAL VISUALIZATION FUNCTION - Handles ANY data type, ANY structure
     """
     try:
         # 🔥 RAW DATA LOGGING - COMPLETE INPUT DUMP
-        print(f"\n🎨 RAW VIZ DATA - COMPLETE INPUT DUMP:")
+        print(f"\n🎨 UNIVERSAL VIZ - COMPLETE INPUT DUMP:")
         print(f"📝 Input Type: {type(data_str)}")
         print(f"📦 Input Size: {len(str(data_str))} characters")
         print(f"🔥 RAW COMPLETE DATA:")
@@ -35,10 +36,10 @@ def create_visualization(data_str: str) -> Dict:
             for i, item in enumerate(data_str[:5]):
                 print(f"   🔢 [{i}] ({type(item)}): {str(item)[:200]}{'...' if len(str(item)) > 200 else ''}")
         
-        print(f"🎨 ROBUST VIZ - Processing: {str(data_str)[:200]}...")
+        print(f"🎨 UNIVERSAL VIZ - Processing: {str(data_str)[:200]}...")
         
-        # Step 1: Always try to extract SOMETHING meaningful
-        parsed_data = smart_parse_any_format(data_str)
+        # Step 1: Universal data extraction
+        parsed_data = universal_data_parser(data_str)
         
         # 🔥 RAW PARSED DATA LOGGING
         print(f"🔥 RAW PARSED DATA OUTPUT:")
@@ -47,8 +48,8 @@ def create_visualization(data_str: str) -> Dict:
             for key, value in parsed_data.items():
                 print(f"   🔑 [{key}] ({type(value)}): {str(value)[:200]}{'...' if len(str(value)) > 200 else ''}")
         
-        # Step 2: Create Plotly specification no matter what
-        plotly_spec = create_bulletproof_plotly_spec(parsed_data)
+        # Step 2: Create universal plotly specification
+        plotly_spec = create_universal_plotly_spec(parsed_data)
         
         # 🔥 RAW PLOTLY SPEC LOGGING
         print(f"🔥 RAW PLOTLY SPEC OUTPUT:")
@@ -65,222 +66,398 @@ def create_visualization(data_str: str) -> Dict:
             'spec': plotly_spec
         }
         
-        print(f"✅ VIZ SUCCESS - Created chart with {len(plotly_spec.get('data', []))} traces")
+        print(f"✅ UNIVERSAL VIZ SUCCESS - Created chart with {len(plotly_spec.get('data', []))} traces")
         return result
         
     except Exception as e:
-        print(f"⚠️ VIZ FALLBACK - Error: {e}")
+        print(f"⚠️ UNIVERSAL VIZ FALLBACK - Error: {e}")
         # NEVER fail - always return a valid chart
         return create_emergency_chart(data_str, str(e))
 
-def smart_parse_any_format(data_str: str) -> Dict:
+def universal_data_parser(data_input: Any) -> Dict:
     """
-    Parse ANY data format and extract meaningful information
+    UNIVERSAL DATA PARSER - Handles ANY data format imaginable
     """
-    print("🔍 Smart parsing starting...")
+    print("🌍 UNIVERSAL PARSER - Starting analysis...")
     
-    # Method 0: Handle case where input is already a dictionary
-    if isinstance(data_str, dict):
-        print("✅ Input is already a dictionary - using directly")
-        return extract_from_dict(data_str)
+    # Stage 1: Handle direct data types
+    if isinstance(data_input, dict):
+        print("✅ Input is dictionary - using universal dict parser")
+        return parse_any_dict(data_input)
     
-    # Method 1: Try direct JSON parsing first
-    try:
-        data = json.loads(data_str)
-        print("✅ JSON parsed successfully")
-        return extract_from_json(data)
-    except:
-        print("📝 Direct JSON failed, trying to extract JSON from text...")
+    if isinstance(data_input, list):
+        print("✅ Input is list - using universal list parser")
+        return parse_any_list(data_input)
     
-    # Method 2: Extract JSON from text (handles markdown code blocks)
-    try:
-        import re
-        
-        # Look for JSON in markdown code blocks
-        json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
-        json_match = re.search(json_pattern, data_str, re.DOTALL)
-        
-        if json_match:
-            json_str = json_match.group(1)
-            print(f"🔍 Found JSON in markdown: {json_str[:100]}...")
-            data = json.loads(json_str)
-            print("✅ JSON from markdown parsed successfully")
-            return extract_from_json(data)
-            
-    except Exception as e:
-        print(f"📝 Markdown JSON extraction failed: {e}")
+    if isinstance(data_input, (int, float)):
+        print("✅ Input is single number")
+        return {"type": "single_number", "x": ["Value"], "y": [float(data_input)], "title": f"Value: {data_input}"}
     
-    # Method 3: Look for JSON objects anywhere in the text
-    try:
-        import re
-        
-        # Find JSON-like structures
-        json_pattern = r'\{[^{}]*"[^"]*":\s*[^,}]*[^{}]*\}'
-        json_matches = re.findall(json_pattern, data_str, re.DOTALL)
-        
-        for json_match in json_matches:
-            try:
-                # Expand to get the full JSON object
-                start_idx = data_str.find(json_match)
-                brace_count = 0
-                end_idx = start_idx
-                
-                for i, char in enumerate(data_str[start_idx:], start_idx):
-                    if char == '{':
-                        brace_count += 1
-                    elif char == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            end_idx = i + 1
-                            break
-                
-                full_json = data_str[start_idx:end_idx]
-                print(f"🔍 Attempting to parse extracted JSON: {full_json[:100]}...")
-                data = json.loads(full_json)
-                print("✅ Extracted JSON parsed successfully")
-                return extract_from_json(data)
-                
-            except Exception as e:
-                print(f"⚠️ Failed to parse JSON match: {e}")
-                continue
-                
-    except Exception as e:
-        print(f"📝 JSON pattern extraction failed: {e}")
+    # Stage 2: String parsing - extract structured data
+    data_str = str(data_input)
     
-    # Method 4: Fallback to text extraction
-    print("🔍 All JSON parsing failed, falling back to text extraction...")
-    return extract_from_text(str(data_str))
+    # Try JSON parsing first
+    json_data = extract_json_from_string(data_str)
+    if json_data:
+        print("✅ Extracted JSON from string")
+        return universal_data_parser(json_data)
+    
+    # Try CSV/table parsing
+    table_data = extract_table_from_string(data_str)
+    if table_data:
+        print("✅ Extracted table data from string")
+        return table_data
+    
+    # Try number extraction
+    number_data = extract_numbers_from_string(data_str)
+    if number_data:
+        print("✅ Extracted numbers from string")
+        return number_data
+    
+    # Try key-value extraction
+    kv_data = extract_key_values_from_string(data_str)
+    if kv_data:
+        print("✅ Extracted key-value pairs from string")
+        return kv_data
+    
+    # Ultimate fallback
+    print("⚠️ Using fallback text analysis")
+    return {"type": "text_fallback", "x": ["Text"], "y": [len(data_str)], "title": "Text Length Analysis"}
 
-def extract_from_json(data: Any) -> Dict:
+def parse_any_dict(data: Dict) -> Dict:
     """
-    Extract visualization data from JSON structure
+    UNIVERSAL DICTIONARY PARSER - Handles ANY dictionary structure
     """
-    if isinstance(data, list):
-        return extract_from_list(data)
-    elif isinstance(data, dict):
-        return extract_from_dict(data)
-    else:
-        return {"type": "simple", "values": [data] if data is not None else [0]}
+    print(f"📊 UNIVERSAL DICT PARSER - Processing {len(data)} keys")
+    
+    # 🔄 COMPARISON MODE DETECTION
+    if data.get("comparison_mode") or "compare" in str(data).lower():
+        return handle_comparison_data(data)
+    
+    # 📊 FORECAST DATA DETECTION (but not limited to it)
+    if any(key in data for key in ["forecast", "Forecast", "forecast_data", "prediction"]):
+        forecast_result = handle_forecast_data(data)
+        if forecast_result["type"] != "error":
+            return forecast_result
+    
+    # 📋 MULTI-DATASET DETECTION
+    if "datasets" in data or "data" in data:
+        multi_result = handle_multi_dataset(data)
+        if multi_result["type"] != "error":
+            return multi_result
+    
+    # 🔍 TIME SERIES DETECTION
+    time_result = detect_time_series(data)
+    if time_result["type"] != "error":
+        return time_result
+    
+    # 📈 SIMPLE NUMERIC DATA
+    numeric_result = extract_numeric_data(data)
+    if numeric_result["type"] != "error":
+        return numeric_result
+    
+    # 🔄 NESTED STRUCTURE HANDLING
+    nested_result = handle_nested_structures(data)
+    if nested_result["type"] != "error":
+        return nested_result
+    
+    # Fallback - create something from whatever we have
+    return create_fallback_from_dict(data)
 
-def extract_from_list(data: List) -> Dict:
+def parse_any_list(data: List) -> Dict:
     """
-    Extract from list data - handles ALL possible list formats
+    UNIVERSAL LIST PARSER - Handles ANY list structure
     """
+    print(f"📋 UNIVERSAL LIST PARSER - Processing {len(data)} items")
+    
     if not data:
-        return {"type": "empty", "x": ["No Data"], "y": [0]}
+        return {"type": "empty", "x": ["No Data"], "y": [0], "title": "Empty Dataset"}
     
-    # Check if list contains dictionaries
-    if isinstance(data[0], dict):
-        return extract_from_dict_list(data)
-    else:
-        # Simple list of numbers or strings
+    # Check first item to determine list type
+    first_item = data[0]
+    
+    # List of dictionaries
+    if isinstance(first_item, dict):
+        return handle_dict_list(data)
+    
+    # List of numbers
+    if isinstance(first_item, (int, float)):
         return {
-            "type": "simple_list",
+            "type": "number_list",
             "x": [f"Item {i+1}" for i in range(len(data))],
-            "y": [float(x) if isinstance(x, (int, float)) else 1 for x in data],
-            "labels": [str(x) for x in data]
+            "y": [float(x) for x in data],
+            "title": f"Numeric Data ({len(data)} points)"
         }
+    
+    # List of strings
+    if isinstance(first_item, str):
+        return handle_string_list(data)
+    
+    # List of lists (matrix)
+    if isinstance(first_item, list):
+        return handle_matrix_data(data)
+    
+    # Mixed list
+    return handle_mixed_list(data)
 
-def extract_from_dict_list(data: List[Dict]) -> Dict:
+def handle_comparison_data(data: Dict) -> Dict:
     """
-    Extract from list of dictionaries - the most common format
+    Handle comparison data - IMPROVED to handle all comparison types
     """
+    print("🔄 UNIVERSAL COMPARISON HANDLER")
+    
+    datasets = data.get("datasets", [])
+    
+    # If no explicit datasets, try to find multiple data series
+    if not datasets:
+        datasets = find_multiple_series(data)
+    
+    if len(datasets) < 2:
+        print("⚠️ Insufficient datasets for comparison")
+        return {"type": "error"}
+    
+    teams_data = {}
+    colors = ['#2E86C1', '#E74C3C', '#28B463', '#F39C12', '#8E44AD', '#17A2B8', '#FD7E14', '#20C997']
+    
+    print(f"🔄 Processing {len(datasets)} datasets for comparison")
+    
+    for i, dataset in enumerate(datasets):
+        label = extract_dataset_label(dataset, i)
+        x_values, y_values = extract_xy_from_dataset(dataset)
+        
+        if x_values and y_values:
+            teams_data[label] = {
+                "x": x_values,
+                "y": y_values,
+                "color": colors[i % len(colors)]
+            }
+            print(f"✅ Added comparison dataset: {label} ({len(y_values)} points)")
+    
+    if len(teams_data) >= 2:
+        return {
+            "type": "multi_series_comparison",
+            "teams": teams_data,
+            "title": f"Data Comparison: {' vs '.join(list(teams_data.keys())[:3])}"
+        }
+    
+    return {"type": "error"}
+
+def handle_forecast_data(data: Dict) -> Dict:
+    """
+    Handle forecast data - ENHANCED but not limited to forecasts only
+    """
+    print("📊 UNIVERSAL FORECAST HANDLER")
+    
+    # Multiple ways to find forecast data
+    forecast_data = (data.get("forecast") or data.get("Forecast") or 
+                    data.get("forecast_data") or data.get("prediction") or
+                    data.get("predictions"))
+    
+    if not forecast_data:
+        return {"type": "error"}
+    
+    # Handle different forecast formats
+    if isinstance(forecast_data, dict):
+        # Date-value pairs
+        dates = list(forecast_data.keys())
+        values = [safe_float(v) for v in forecast_data.values()]
+        
+        return {
+            "type": "forecast_series",
+            "x": [format_date_string(d) for d in dates],
+            "y": values,
+            "title": build_title(data, "Forecast"),
+            "metadata": extract_metadata(data)
+        }
+    
+    elif isinstance(forecast_data, list):
+        # List of data points
+        x_values, y_values = extract_xy_from_list(forecast_data)
+        
+        return {
+            "type": "forecast_series",
+            "x": x_values,
+            "y": y_values,
+            "title": build_title(data, "Forecast"),
+            "metadata": extract_metadata(data)
+        }
+    
+    return {"type": "error"}
+
+def handle_dict_list(data: List[Dict]) -> Dict:
+    """
+    UNIVERSAL DICT LIST HANDLER - Works with any dictionary structure
+    """
+    print(f"📋 DICT LIST HANDLER - Analyzing {len(data)} records")
+    
     # Get all possible field names
     all_fields = set()
     for item in data:
-        all_fields.update(item.keys())
+        if isinstance(item, dict):
+            all_fields.update(item.keys())
     
-    print(f"🔑 Fields found: {all_fields}")
+    print(f"🔑 All fields found: {sorted(all_fields)}")
     
-    # Smart field detection with multiple fallbacks
-    x_field = detect_x_field(all_fields)
-    y_field = detect_y_field(all_fields)
-    team_field = detect_team_field(all_fields)
+    # Universal field detection
+    x_field = detect_x_field_universal(all_fields)
+    y_field = detect_y_field_universal(all_fields)
+    group_field = detect_group_field_universal(all_fields)
     
-    print(f"📊 Using x={x_field}, y={y_field}, team={team_field}")
+    print(f"📊 Selected fields - X: {x_field}, Y: {y_field}, Group: {group_field}")
     
-    # Extract data with fallbacks
-    if team_field and len(set(str(item.get(team_field, '')) for item in data)) > 1:
-        # Multi-series data (with teams/categories)
-        return extract_multi_series(data, x_field, y_field, team_field)
+    # Extract data based on detected fields
+    if group_field:
+        return extract_grouped_data(data, x_field, y_field, group_field)
     else:
-        # Single series data
-        return extract_single_series(data, x_field, y_field)
+        return extract_simple_data(data, x_field, y_field)
 
-def detect_x_field(fields: set) -> str:
+def detect_x_field_universal(fields: set) -> str:
     """
-    Detect X-axis field with multiple fallbacks
+    UNIVERSAL X-FIELD DETECTION - Works for any data type
     """
-    # Priority order for X-axis detection
+    # Priority patterns for X-axis (ordered by likelihood)
     x_patterns = [
-        ['date', 'time'],  # Time fields first
-        ['month', 'year', 'period'],  # Time periods
-        ['x', 'index', 'step'],  # Explicit x fields
-        ['name', 'category', 'label']  # Category fields
+        # Time-based fields
+        ['date', 'time', 'timestamp', 'period', 'month', 'year', 'day'],
+        # ID/sequence fields  
+        ['id', 'index', 'seq', 'number', 'order', 'step', 'iteration'],
+        # Category fields
+        ['name', 'label', 'category', 'type', 'class', 'group'],
+        # Location fields
+        ['location', 'city', 'country', 'region', 'area', 'zone'],
+        # Generic fields
+        ['x', 'key', 'item', 'element', 'field']
     ]
     
     for pattern_group in x_patterns:
         for pattern in pattern_group:
             matches = [f for f in fields if pattern in f.lower()]
             if matches:
+                print(f"🎯 X-field match: {matches[0]} (pattern: {pattern})")
                 return matches[0]
     
-    # Absolute fallback - use first field
-    return list(fields)[0] if fields else 'index'
+    # Use first field as fallback
+    field_list = sorted(list(fields))
+    return field_list[0] if field_list else 'index'
 
-def detect_y_field(fields: set) -> str:
+def detect_y_field_universal(fields: set) -> str:
     """
-    Detect Y-axis field with multiple fallbacks
+    UNIVERSAL Y-FIELD DETECTION - Works for any numeric data
     """
-    # Priority order for Y-axis detection
+    # Priority patterns for Y-axis (ordered by likelihood)
     y_patterns = [
-        ['value', 'volume', 'amount', 'count'],  # Value fields
-        ['total', 'sum', 'avg', 'average'],  # Aggregation fields
-        ['ftes', 'required', 'needed', 'additional'],  # Workforce fields
-        ['cost', 'price', 'rate', 'percentage'],  # Financial fields
-        ['y', 'val', 'number', 'num']  # Explicit y fields
+        # Common numeric fields
+        ['value', 'amount', 'count', 'quantity', 'volume', 'size'],
+        # Financial fields
+        ['cost', 'price', 'revenue', 'profit', 'budget', 'expense'],
+        # Measurement fields
+        ['score', 'rating', 'percentage', 'rate', 'ratio', 'level'],
+        # Workforce fields
+        ['ftes', 'headcount', 'employees', 'staff', 'resources'],
+        # Statistical fields
+        ['total', 'sum', 'average', 'mean', 'median', 'max', 'min'],
+        # Generic numeric fields
+        ['y', 'val', 'num', 'data', 'metric', 'measure', 'result']
     ]
     
     for pattern_group in y_patterns:
         for pattern in pattern_group:
             matches = [f for f in fields if pattern in f.lower()]
             if matches:
+                print(f"🎯 Y-field match: {matches[0]} (pattern: {pattern})")
                 return matches[0]
     
-    # Look for any numeric-looking field
+    # Look for fields with numeric-looking names
     for field in fields:
-        if any(num_word in field.lower() for num_word in ['_ftes', '_count', '_total', '_val']):
+        if any(indicator in field.lower() for indicator in ['_value', '_count', '_total', '_sum', '_avg']):
+            print(f"🎯 Y-field numeric indicator: {field}")
             return field
     
-    # Absolute fallback - use second field or first field
-    field_list = list(fields)
-    return field_list[1] if len(field_list) > 1 else field_list[0] if field_list else 'value'
+    # Find field with most numeric values
+    return find_most_numeric_field(fields)
 
-def detect_team_field(fields: set) -> str:
+def detect_group_field_universal(fields: set) -> str:
     """
-    Detect team/category field for color coding
+    UNIVERSAL GROUP FIELD DETECTION - For multi-series data
     """
-    team_patterns = ['team', 'group', 'category', 'type', 'name', 'business', 'department', 'unit']
+    group_patterns = [
+        'team', 'group', 'category', 'type', 'class', 'department',
+        'business', 'unit', 'division', 'segment', 'stream', 'branch',
+        'region', 'area', 'zone', 'location', 'site', 'office'
+    ]
     
-    for pattern in team_patterns:
+    for pattern in group_patterns:
         matches = [f for f in fields if pattern in f.lower()]
         if matches:
+            print(f"🎯 Group field match: {matches[0]} (pattern: {pattern})")
             return matches[0]
     
     return None
 
-def extract_single_series(data: List[Dict], x_field: str, y_field: str) -> Dict:
+def find_most_numeric_field(fields: set) -> str:
     """
-    Extract single series data
+    Find the field most likely to contain numeric data
     """
+    # This is a heuristic - in practice, we'd check actual data
+    numeric_indicators = ['value', 'count', 'total', 'amount', 'number', 'qty', 'vol']
+    
+    for indicator in numeric_indicators:
+        matches = [f for f in fields if indicator in f.lower()]
+        if matches:
+            return matches[0]
+    
+    # Fallback to second field or first field
+    field_list = sorted(list(fields))
+    return field_list[1] if len(field_list) > 1 else field_list[0] if field_list else 'value'
+
+def extract_grouped_data(data: List[Dict], x_field: str, y_field: str, group_field: str) -> Dict:
+    """
+    Extract multi-series data grouped by a field
+    """
+    print(f"📊 EXTRACTING GROUPED DATA: {group_field}")
+    
+    groups = {}
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+            
+        group = str(item.get(group_field, 'Unknown')).strip()
+        if not group:
+            group = 'Unknown'
+            
+        if group not in groups:
+            groups[group] = {"x": [], "y": []}
+        
+        x_val = item.get(x_field, '')
+        y_val = item.get(y_field, 0)
+        
+        groups[group]["x"].append(str(x_val))
+        groups[group]["y"].append(safe_float(y_val))
+    
+    print(f"📊 Found {len(groups)} groups: {list(groups.keys())}")
+    
+    return {
+        "type": "multi_series",
+        "teams": groups,
+        "title": f"{y_field.title()} by {group_field.title()}"
+    }
+
+def extract_simple_data(data: List[Dict], x_field: str, y_field: str) -> Dict:
+    """
+    Extract single-series data
+    """
+    print(f"📊 EXTRACTING SIMPLE DATA: {x_field} vs {y_field}")
+    
     x_values = []
     y_values = []
     
     for item in data:
+        if not isinstance(item, dict):
+            continue
+            
         x_val = item.get(x_field, '')
         y_val = item.get(y_field, 0)
         
-        # Convert values safely
         x_values.append(str(x_val))
         y_values.append(safe_float(y_val))
     
@@ -288,257 +465,429 @@ def extract_single_series(data: List[Dict], x_field: str, y_field: str) -> Dict:
         "type": "single_series",
         "x": x_values,
         "y": y_values,
-        "title": f"{y_field.title()} over {x_field.title()}"
+        "title": f"{y_field.title()} vs {x_field.title()}"
     }
 
-def extract_multi_series(data: List[Dict], x_field: str, y_field: str, team_field: str) -> Dict:
+def extract_json_from_string(text: str) -> Any:
     """
-    Extract multi-series data with color coding
+    Extract JSON from any string format
     """
-    # Group by team
-    teams = {}
-    for item in data:
-        team = str(item.get(team_field, 'Unknown')).title()
-        if team not in teams:
-            teams[team] = {"x": [], "y": []}
-        
-        x_val = item.get(x_field, '')
-        y_val = item.get(y_field, 0)
-        
-        teams[team]["x"].append(str(x_val))
-        teams[team]["y"].append(safe_float(y_val))
+    try:
+        # Direct JSON
+        return json.loads(text)
+    except:
+        pass
     
-    return {
-        "type": "multi_series",
-        "teams": teams,
-        "title": f"{y_field.title()} by {team_field.title()} over {x_field.title()}"
-    }
+    try:
+        # JSON in markdown code blocks
+        json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
+        match = re.search(json_pattern, text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+    except:
+        pass
+    
+    try:
+        # JSON objects anywhere in text
+        json_pattern = r'\{[^{}]*"[^"]*":[^}]*\}'
+        matches = re.findall(json_pattern, text, re.DOTALL)
+        for match in matches:
+            try:
+                return json.loads(match)
+            except:
+                continue
+    except:
+        pass
+    
+    return None
 
-def extract_from_dict(data: Dict) -> Dict:
+def extract_table_from_string(text: str) -> Dict:
     """
-    Extract from dictionary data - ENHANCED WITH COMPARISON MODE SUPPORT
+    Extract tabular data from string (CSV, TSV, etc.)
     """
-    # 🔄 HANDLE COMPARISON MODE
-    if data.get("comparison_mode"):
-        print("🔄 Processing comparison visualization")
-        
-        datasets = data.get("datasets", [])
-        if len(datasets) < 2:
-            print("⚠️ Insufficient datasets for comparison")
-            return {"type": "error", "x": ["Error"], "y": [0], "title": "Insufficient Data for Comparison"}
-        
-        teams_data = {}
-        colors = ['#2E86C1', '#E74C3C', '#28B463', '#F39C12', '#8E44AD', '#17A2B8']
-        
-        print(f"🔄 Processing {len(datasets)} datasets for comparison")
-        
-        for i, dataset in enumerate(datasets):
-            label = dataset.get("label", f"Dataset {i+1}")
-            points = dataset.get("points", [])
+    try:
+        # Try different separators
+        for sep in [',', '\t', '|', ';']:
+            lines = text.strip().split('\n')
+            if len(lines) < 2:
+                continue
+                
+            # Check if this looks like a table
+            first_row = lines[0].split(sep)
+            second_row = lines[1].split(sep)
             
-            if points:
-                # Extract x and y values from points
-                x_values = [point.get("date", "") for point in points]
-                y_values = [point.get("value", 0) for point in points]
+            if len(first_row) >= 2 and len(second_row) == len(first_row):
+                print(f"📋 Found table with separator: '{sep}'")
                 
-                teams_data[label] = {
-                    "x": x_values,
-                    "y": y_values,
-                    "color": colors[i % len(colors)]
-                }
+                headers = [h.strip() for h in first_row]
+                data_rows = []
                 
-                print(f"✅ Added comparison dataset: {label} ({len(points)} points)")
-            else:
-                print(f"⚠️ No data points for dataset: {label}")
-        
-        if len(teams_data) >= 2:
-            return {
-                "type": "multi_series_comparison",
-                "teams": teams_data,
-                "title": f"Forecast Comparison: {' vs '.join(teams_data.keys())}"
-            }
-        else:
-            print("❌ Failed to create comparison data")
-            return {"type": "error", "x": ["Error"], "y": [0], "title": "Comparison Data Processing Failed"}
+                for line in lines[1:]:
+                    row = [cell.strip() for cell in line.split(sep)]
+                    if len(row) == len(headers):
+                        data_rows.append(dict(zip(headers, row)))
+                
+                if data_rows:
+                    return parse_any_list(data_rows)
+    except:
+        pass
     
-    # Check if it's already processed data with teams
-    if "teams" in data:
-        return data
-    
-    # ✅ ENHANCED: Handle forecast_data structure specifically
-    if "forecast_data" in data:
-        print("🔍 Found forecast_data structure!")
-        forecast_data = data["forecast_data"]
-        
-        if isinstance(forecast_data, list) and len(forecast_data) > 0:
-            if isinstance(forecast_data[0], dict):
-                print(f"📊 Processing forecast_data list with {len(forecast_data)} points")
-                
-                # Extract directly from forecast_data list
-                dates = []
-                values = []
-                
-                for item in forecast_data:
-                    date_val = item.get("date", "")
-                    value_val = item.get("value", 0)
-                    
-                    dates.append(str(date_val))
-                    values.append(safe_float(value_val))
-                
-                print(f"📅 Extracted dates: {dates[:3]}... to {dates[-1] if dates else 'none'}")
-                print(f"📊 Extracted values: {values[:3]}... to {values[-1] if values else 'none'}")
-                
-                # Build title from metadata
-                business = data.get("business", "")
-                substream = data.get("substream", "")
-                team = data.get("team", "")
-                
-                title_parts = []
-                if business:
-                    title_parts.append(business.title())
-                if substream:
-                    title_parts.append(substream.upper())
-                if team:
-                    title_parts.append(team.title())
-                
-                if title_parts:
-                    title = f"Volume Forecast - {' '.join(title_parts)}"
-                else:
-                    title = "Volume Forecast"
-                
-                print(f"📋 Chart title: {title}")
-                
-                return {
-                    "type": "forecast_data_series",
-                    "x": dates,
-                    "y": values,
-                    "title": title,
-                    "business": business,
-                    "substream": substream,
-                    "team": team
-                }
-    
-    # ✅ FORECAST DATA FIX - Handle forecast data structure specifically  
-    if "Forecast" in data or "forecast" in data:
-        print("🔍 Found forecast data structure!")
-        forecast_data = data.get("Forecast") or data.get("forecast")
-        
-        if isinstance(forecast_data, dict):
-            # Extract date-value pairs from forecast
-            dates = list(forecast_data.keys())
-            values = list(forecast_data.values())
-            
-            print(f"📅 Raw dates: {dates[:3]}...")
-            print(f"📊 Raw values: {values[:3]}...")
-            
-            # Convert dates to readable format
-            formatted_dates = []
-            for date in dates:
-                try:
-                    # Try to format dates nicely
-                    if isinstance(date, str) and len(date) == 10:  # YYYY-MM-DD format
-                        year, month, day = date.split('-')
-                        # Use short month format: 2025-06, 2025-07, etc.
-                        formatted_dates.append(f"{year}-{month}")
-                    else:
-                        formatted_dates.append(str(date))
-                except:
-                    formatted_dates.append(str(date))
-            
-            business = data.get("Business", data.get("business", ""))
-            stream = data.get("Stream", data.get("stream", ""))
-            team = data.get("Team", data.get("team", ""))
-            
-            # Create meaningful title
-            title_parts = []
-            if business:
-                title_parts.append(business.title())
-            if stream:
-                title_parts.append(stream.upper())
-            if team:
-                title_parts.append(team.title())
-            
-            if title_parts:
-                title = f"Volume Forecast - {' '.join(title_parts)}"
-            else:
-                title = "Volume Forecast"
-            
-            print(f"📊 Extracted {len(dates)} forecast points:")
-            print(f"   📅 Dates: {formatted_dates[:3]}... to {formatted_dates[-1] if formatted_dates else 'none'}")
-            print(f"   📊 Values: {values[:3]}... to {values[-1] if values else 'none'}")
-            print(f"   📋 Title: {title}")
-            
-            return {
-                "type": "forecast_series",
-                "x": formatted_dates,
-                "y": [safe_float(v) for v in values],
-                "title": title,
-                "business": business,
-                "stream": stream,
-                "team": team
-            }
-    
-    # Check if it's a nested structure
-    if "data" in data and isinstance(data["data"], list):
-        return extract_from_list(data["data"])
-    
-    # Simple key-value pairs (existing functionality)
-    if all(isinstance(v, (int, float, str)) for v in data.values()):
-        return {
-            "type": "dict_simple",
-            "x": list(data.keys()),
-            "y": [safe_float(v) for v in data.values()],
-            "title": "Data Overview"
-        }
-    
-    # Complex dictionary - extract what we can
-    numeric_fields = {k: v for k, v in data.items() if isinstance(v, (int, float))}
-    if numeric_fields:
-        return {
-            "type": "dict_numeric",
-            "x": list(numeric_fields.keys()),
-            "y": list(numeric_fields.values()),
-            "title": "Numeric Data"
-        }
-    
-    # Fallback
-    return {"type": "dict_fallback", "x": ["Data"], "y": [1], "title": "Data Present"}
+    return None
 
-def extract_from_text(data_str: str) -> Dict:
+def extract_numbers_from_string(text: str) -> Dict:
     """
-    Extract data from plain text using regex
+    Extract numeric data from any string
     """
-    print("🔍 Extracting from text...")
+    # Find all numbers
+    numbers = re.findall(r'-?\d*\.?\d+', text)
     
-    # Extract numbers
-    numbers = re.findall(r'-?\d*\.?\d+', data_str)
-    if numbers:
-        y_values = [float(n) for n in numbers[:20]]  # Limit to 20 points
+    if len(numbers) >= 2:  # Need at least 2 points for a chart
+        y_values = [float(n) for n in numbers[:50]]  # Limit to 50 points
         x_values = [f"Point {i+1}" for i in range(len(y_values))]
         
         return {
-            "type": "text_numbers",
+            "type": "numeric_extraction",
             "x": x_values,
             "y": y_values,
-            "title": "Extracted Data"
+            "title": f"Numeric Data ({len(y_values)} points)"
         }
     
-    # Extract words as categories
-    words = re.findall(r'\b[A-Za-z]+\b', data_str)
-    if words:
-        word_counts = {}
-        for word in words[:10]:  # Top 10 words
-            word_counts[word] = word_counts.get(word, 0) + 1
+    return None
+
+def extract_key_values_from_string(text: str) -> Dict:
+    """
+    Extract key-value pairs from string
+    """
+    # Look for key:value or key=value patterns
+    patterns = [
+        r'(\w+):\s*([+-]?\d*\.?\d+)',  # key: number
+        r'(\w+)=([+-]?\d*\.?\d+)',     # key=number
+        r'(\w+)\s+([+-]?\d*\.?\d+)'    # key number
+    ]
+    
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if len(matches) >= 2:
+            keys = [m[0] for m in matches]
+            values = [float(m[1]) for m in matches]
+            
+            return {
+                "type": "key_value_pairs",
+                "x": keys,
+                "y": values,
+                "title": "Key-Value Data"
+            }
+    
+    return None
+
+def handle_string_list(data: List[str]) -> Dict:
+    """
+    Handle list of strings
+    """
+    # Try to extract numbers from strings
+    numeric_values = []
+    labels = []
+    
+    for item in data:
+        numbers = re.findall(r'-?\d*\.?\d+', str(item))
+        if numbers:
+            numeric_values.append(float(numbers[0]))
+            labels.append(str(item))
+        else:
+            labels.append(str(item))
+    
+    if numeric_values and len(numeric_values) == len(data):
+        return {
+            "type": "string_numeric",
+            "x": labels,
+            "y": numeric_values,
+            "title": "String Data with Numeric Values"
+        }
+    else:
+        # Word frequency or category count
+        unique_items = list(set(data))
+        counts = [data.count(item) for item in unique_items]
         
         return {
-            "type": "text_words",
-            "x": list(word_counts.keys()),
-            "y": list(word_counts.values()),
-            "title": "Word Frequency"
+            "type": "string_frequency",
+            "x": unique_items,
+            "y": counts,
+            "title": "String Frequency"
+        }
+
+def handle_matrix_data(data: List[List]) -> Dict:
+    """
+    Handle matrix/2D array data
+    """
+    if not data or not data[0]:
+        return {"type": "error"}
+    
+    # Use first row as headers if they look like strings
+    if all(isinstance(item, str) for item in data[0]):
+        headers = data[0]
+        matrix_data = data[1:]
+    else:
+        headers = [f"Col_{i+1}" for i in range(len(data[0]))]
+        matrix_data = data
+    
+    # Convert to list of dictionaries
+    dict_list = []
+    for row in matrix_data:
+        if len(row) == len(headers):
+            dict_list.append(dict(zip(headers, row)))
+    
+    return handle_dict_list(dict_list)
+
+def handle_mixed_list(data: List) -> Dict:
+    """
+    Handle list with mixed data types
+    """
+    # Try to convert everything to numeric
+    numeric_data = []
+    labels = []
+    
+    for i, item in enumerate(data):
+        if isinstance(item, (int, float)):
+            numeric_data.append(float(item))
+            labels.append(f"Item {i+1}")
+        elif isinstance(item, str):
+            numbers = re.findall(r'-?\d*\.?\d+', item)
+            if numbers:
+                numeric_data.append(float(numbers[0]))
+                labels.append(item)
+            else:
+                numeric_data.append(i)  # Use index
+                labels.append(item)
+        else:
+            numeric_data.append(i)  # Use index
+            labels.append(str(item))
+    
+    return {
+        "type": "mixed_data",
+        "x": labels,
+        "y": numeric_data,
+        "title": "Mixed Data Types"
+    }
+
+def detect_time_series(data: Dict) -> Dict:
+    """
+    Detect and handle time series data
+    """
+    # Look for time-related keys
+    time_keys = ['date', 'time', 'timestamp', 'period', 'month', 'year']
+    
+    for key in data.keys():
+        if any(time_word in key.lower() for time_word in time_keys):
+            # Found potential time series
+            time_data = data[key]
+            if isinstance(time_data, dict):
+                dates = list(time_data.keys())
+                values = [safe_float(v) for v in time_data.values()]
+                
+                return {
+                    "type": "time_series",
+                    "x": [format_date_string(d) for d in dates],
+                    "y": values,
+                    "title": f"Time Series: {key.title()}"
+                }
+    
+    return {"type": "error"}
+
+def extract_numeric_data(data: Dict) -> Dict:
+    """
+    Extract any numeric data from dictionary
+    """
+    numeric_pairs = []
+    
+    for key, value in data.items():
+        if isinstance(value, (int, float)):
+            numeric_pairs.append((key, float(value)))
+        elif isinstance(value, str):
+            numbers = re.findall(r'-?\d*\.?\d+', value)
+            if numbers:
+                numeric_pairs.append((key, float(numbers[0])))
+    
+    if len(numeric_pairs) >= 2:
+        keys = [pair[0] for pair in numeric_pairs]
+        values = [pair[1] for pair in numeric_pairs]
+        
+        return {
+            "type": "numeric_dict",
+            "x": keys,
+            "y": values,
+            "title": "Numeric Data"
         }
     
-    # Ultimate fallback
-    return {"type": "text_fallback", "x": ["Text"], "y": [1], "title": "Text Data"}
+    return {"type": "error"}
+
+def handle_nested_structures(data: Dict) -> Dict:
+    """
+    Handle nested dictionary structures
+    """
+    # Look for nested data
+    for key, value in data.items():
+        if isinstance(value, dict) and len(value) >= 2:
+            result = universal_data_parser(value)
+            if result["type"] != "error":
+                result["title"] = f"{key.title()}: {result.get('title', 'Data')}"
+                return result
+        elif isinstance(value, list) and len(value) >= 2:
+            result = universal_data_parser(value)
+            if result["type"] != "error":
+                result["title"] = f"{key.title()}: {result.get('title', 'Data')}"
+                return result
+    
+    return {"type": "error"}
+
+def create_fallback_from_dict(data: Dict) -> Dict:
+    """
+    Create visualization from any dictionary as last resort
+    """
+    # Get keys and try to assign numeric values
+    keys = list(data.keys())[:10]  # Limit to 10 items
+    values = []
+    
+    for key in keys:
+        value = data[key]
+        if isinstance(value, (int, float)):
+            values.append(float(value))
+        elif isinstance(value, str):
+            values.append(len(value))  # String length
+        elif isinstance(value, list):
+            values.append(len(value))  # List length
+        elif isinstance(value, dict):
+            values.append(len(value))  # Dict length
+        else:
+            values.append(1)  # Default value
+    
+    return {
+        "type": "dict_fallback",
+        "x": keys,
+        "y": values,
+        "title": "Data Structure Overview"
+    }
+
+def find_multiple_series(data: Dict) -> List:
+    """
+    Find multiple data series in a dictionary
+    """
+    series = []
+    
+    for key, value in data.items():
+        if isinstance(value, dict) and len(value) >= 2:
+            series.append({"label": key, "data": value})
+        elif isinstance(value, list) and len(value) >= 2:
+            series.append({"label": key, "data": value})
+    
+    return series
+
+def extract_dataset_label(dataset: Any, index: int) -> str:
+    """
+    Extract label from dataset
+    """
+    if isinstance(dataset, dict):
+        return (dataset.get("label") or dataset.get("name") or 
+                dataset.get("title") or f"Dataset {index + 1}")
+    else:
+        return f"Dataset {index + 1}"
+
+def extract_xy_from_dataset(dataset: Any) -> tuple:
+    """
+    Extract X and Y values from any dataset format
+    """
+    if isinstance(dataset, dict):
+        if "data" in dataset:
+            return extract_xy_from_dataset(dataset["data"])
+        elif "points" in dataset:
+            return extract_xy_from_list(dataset["points"])
+        elif len(dataset) >= 2:
+            keys = list(dataset.keys())
+            values = [safe_float(v) for v in dataset.values()]
+            return keys, values
+    elif isinstance(dataset, list):
+        return extract_xy_from_list(dataset)
+    
+    return [], []
+
+def extract_xy_from_list(data: List) -> tuple:
+    """
+    Extract X and Y from list data
+    """
+    if not data:
+        return [], []
+    
+    if isinstance(data[0], dict):
+        # List of dictionaries
+        x_values = []
+        y_values = []
+        
+        # Find best x and y fields
+        all_fields = set()
+        for item in data:
+            if isinstance(item, dict):
+                all_fields.update(item.keys())
+        
+        x_field = detect_x_field_universal(all_fields)
+        y_field = detect_y_field_universal(all_fields)
+        
+        for item in data:
+            if isinstance(item, dict):
+                x_values.append(str(item.get(x_field, '')))
+                y_values.append(safe_float(item.get(y_field, 0)))
+        
+        return x_values, y_values
+    else:
+        # Simple list
+        x_values = [f"Point {i+1}" for i in range(len(data))]
+        y_values = [safe_float(v) for v in data]
+        return x_values, y_values
+
+def build_title(data: Dict, default: str) -> str:
+    """
+    Build meaningful title from data
+    """
+    title_parts = []
+    
+    # Look for common title fields
+    title_fields = ['title', 'name', 'business', 'team', 'department', 'category']
+    
+    for field in title_fields:
+        value = data.get(field) or data.get(field.title())
+        if value:
+            title_parts.append(str(value).title())
+    
+    if title_parts:
+        return f"{default}: {' - '.join(title_parts)}"
+    else:
+        return default
+
+def extract_metadata(data: Dict) -> Dict:
+    """
+    Extract metadata from data
+    """
+    metadata = {}
+    
+    meta_fields = ['business', 'team', 'department', 'category', 'type', 'unit', 'source']
+    
+    for field in meta_fields:
+        value = data.get(field) or data.get(field.title())
+        if value:
+            metadata[field] = str(value)
+    
+    return metadata
+
+def format_date_string(date_str: str) -> str:
+    """
+    Format date string for display
+    """
+    try:
+        if isinstance(date_str, str) and len(date_str) == 10:  # YYYY-MM-DD
+            year, month, day = date_str.split('-')
+            return f"{year}-{month}"
+        else:
+            return str(date_str)
+    except:
+        return str(date_str)
 
 def safe_float(value: Any) -> float:
     """
@@ -556,356 +905,237 @@ def safe_float(value: Any) -> float:
     except:
         return 0.0
 
-def create_bulletproof_plotly_spec(parsed_data: Dict) -> Dict:
+def create_universal_plotly_spec(parsed_data: Dict) -> Dict:
     """
-    Create Plotly spec that ALWAYS works - ENHANCED WITH COMPARISON MODE SUPPORT
+    Create Plotly spec that works with ANY data type
     """
     data_type = parsed_data.get("type", "simple")
     
     # Color palette for multi-series
     colors = [
         '#2E86C1', '#E74C3C', '#28B463', '#F39C12', 
-        '#8E44AD', '#17A2B8', '#FD7E14', '#20C997'
+        '#8E44AD', '#17A2B8', '#FD7E14', '#20C997',
+        '#6C757D', '#495057', '#FF6B6B', '#4ECDC4'
     ]
     
-    # 🔄 COMPARISON MODE VISUALIZATION
-    if data_type == "multi_series_comparison" and "teams" in parsed_data:
-        print("🔄 Creating multi-series comparison chart")
+    # 🔄 MULTI-SERIES COMPARISON
+    if data_type in ["multi_series_comparison", "multi_series"]:
+        print("🔄 Creating multi-series visualization")
         
         traces = []
-        teams = parsed_data["teams"]
-        team_names = list(teams.keys())
+        teams = parsed_data.get("teams", {})
         
-        # Add primary data series for each team
         for i, (team_name, team_data) in enumerate(teams.items()):
             color = team_data.get("color", colors[i % len(colors)])
-            traces.append({
-                'x': team_data["x"],
-                'y': team_data["y"],
+            
+            trace = {
+                'x': team_data.get("x", []),
+                'y': team_data.get("y", []),
                 'type': 'scatter',
                 'mode': 'lines+markers',
-                'name': team_name,
-                'line': {'color': color, 'width': 3},
-                'marker': {'size': 8, 'color': color},
-                'yaxis': 'y'
-            })
-            
-            print(f"✅ Added primary trace: {team_name} ({len(team_data['y'])} points)")
-        
-        # 📊 ADD DELTA/DIFFERENCE CALCULATION for 2-team comparison
-        if len(teams) == 2:
-            team_list = list(teams.values())
-            team1_data, team2_data = team_list[0], team_list[1]
-            team1_name, team2_name = team_names[0], team_names[1]
-            
-            print(f"📊 Calculating delta between {team1_name} and {team2_name}")
-            
-            # Calculate differences (assuming same x-axis dates or align by index)
-            min_length = min(len(team1_data["y"]), len(team2_data["y"]))
-            if min_length > 0:
-                deltas = []
-                delta_x = []
-                
-                for i in range(min_length):
-                    try:
-                        y1 = float(team1_data["y"][i])
-                        y2 = float(team2_data["y"][i])
-                        delta = y2 - y1
-                        deltas.append(delta)
-                        
-                        # Use x-axis from first team
-                        if i < len(team1_data["x"]):
-                            delta_x.append(team1_data["x"][i])
-                        else:
-                            delta_x.append(f"Point {i+1}")
-                            
-                    except (ValueError, TypeError):
-                        print(f"⚠️ Error calculating delta for point {i}")
-                        continue
-                
-                if deltas:
-                    # Add delta trace on secondary y-axis
-                    traces.append({
-                        'x': delta_x,
-                        'y': deltas,
-                        'type': 'scatter',
-                        'mode': 'lines',
-                        'name': f'Δ ({team2_name} - {team1_name})',
-                        'line': {'color': '#FFA500', 'width': 2, 'dash': 'dash'},
-                        'yaxis': 'y2'  # Use secondary y-axis for delta
-                    })
-                    
-                    print(f"✅ Added delta trace with {len(deltas)} difference points")
-                    
-                    # Calculate delta statistics
-                    avg_delta = sum(deltas) / len(deltas)
-                    max_delta = max(deltas)
-                    min_delta = min(deltas)
-                    
-                    print(f"📊 Delta Statistics: Avg={avg_delta:.1f}, Max={max_delta:.1f}, Min={min_delta:.1f}")
-        
-        # Enhanced layout for comparison
-        layout = {
-            'title': {
-                'text': parsed_data.get("title", "Team Comparison"),
-                'x': 0.5,
-                'font': {'size': 18, 'family': 'Arial, sans-serif'}
-            },
-            'xaxis': {
-                'title': 'Date',
-                'showgrid': True,
-                'gridcolor': '#E1E5EA',
-                'tickfont': {'size': 12}
-            },
-            'yaxis': {
-                'title': 'Forecast Volume',
-                'side': 'left',
-                'showgrid': True,
-                'gridcolor': '#E1E5EA',
-                'tickfont': {'size': 12}
-            },
-            'legend': {
-                'x': 1.02,
-                'y': 1,
-                'bgcolor': 'rgba(255,255,255,0.8)',
-                'bordercolor': '#E1E5EA',
-                'borderwidth': 1
-            },
-            'plot_bgcolor': 'white',
-            'paper_bgcolor': 'white',
-            'margin': {'t': 60, 'b': 60, 'l': 60, 'r': 140}
-        }
-        
-        # Add secondary y-axis if we have delta data
-        if len(teams) == 2 and any(trace.get('yaxis') == 'y2' for trace in traces):
-            layout['yaxis2'] = {
-                'title': 'Difference (Δ)',
-                'side': 'right',
-                'overlaying': 'y',
-                'showgrid': False,
-                'tickfont': {'size': 12, 'color': '#FFA500'},
-                'titlefont': {'color': '#FFA500'}
-            }
-            
-            print("✅ Added secondary y-axis for delta visualization")
-        
-        print(f"✅ Created comparison chart with {len(traces)} traces")
-        return {
-            'data': traces,
-            'layout': layout
-        }
-    
-    # 🔄 EXISTING MULTI-SERIES LOGIC (for backward compatibility)
-    elif data_type == "multi_series" and "teams" in parsed_data:
-        # Multi-series chart with color coding
-        traces = []
-        teams = parsed_data["teams"]
-        
-        for i, (team_name, team_data) in enumerate(teams.items()):
-            color = colors[i % len(colors)]
-            traces.append({
-                'x': team_data["x"],
-                'y': team_data["y"],
-                'type': 'scatter',
-                'mode': 'lines+markers',
-                'name': f"{team_name} Team",
+                'name': str(team_name),
                 'line': {'color': color, 'width': 3},
                 'marker': {'size': 8, 'color': color}
-            })
+            }
+            traces.append(trace)
+            print(f"✅ Added trace: {team_name} ({len(team_data.get('y', []))} points)")
+        
+        # 📊 ADD DIFFERENCE CALCULATION for 2-series comparison
+        if len(teams) == 2:
+            team_list = list(teams.values())
+            if len(team_list[0].get("y", [])) == len(team_list[1].get("y", [])):
+                y1 = team_list[0]["y"]
+                y2 = team_list[1]["y"]
+                diff = [y2[i] - y1[i] for i in range(len(y1))]
+                
+                traces.append({
+                    'x': team_list[0]["x"],
+                    'y': diff,
+                    'type': 'scatter',
+                    'mode': 'lines',
+                    'name': 'Difference',
+                    'line': {'color': '#FF6B6B', 'width': 2, 'dash': 'dash'},
+                    'yaxis': 'y2'
+                })
+                print("✅ Added difference trace")
         
         layout = {
-            'title': {
-                'text': parsed_data.get("title", "Multi-Team Analysis"),
-                'x': 0.5,
-                'font': {'size': 18, 'family': 'Arial, sans-serif'}
-            },
-            'xaxis': {
-                'title': 'Date',
-                'showgrid': True,
-                'gridcolor': '#E1E5EA',
-                'tickfont': {'size': 12}
-            },
-            'yaxis': {
-                'title': 'Volume',
-                'showgrid': True,
-                'gridcolor': '#E1E5EA',
-                'tickfont': {'size': 12}
-            },
-            'legend': {
-                'x': 1.02,
-                'y': 1,
-                'bgcolor': 'rgba(255,255,255,0.8)',
-                'bordercolor': '#E1E5EA',
-                'borderwidth': 1
-            },
-            'plot_bgcolor': 'white',
-            'paper_bgcolor': 'white',
-            'margin': {'t': 60, 'b': 60, 'l': 60, 'r': 120}
+            'title': {'text': parsed_data.get("title", "Multi-Series Data"), 'font': {'size': 16}},
+            'xaxis': {'title': 'X-Axis', 'showgrid': True},
+            'yaxis': {'title': 'Values', 'showgrid': True},
+            'legend': {'x': 0, 'y': 1.1, 'orientation': 'h'},
+            'hovermode': 'x unified',
+            'showlegend': True
         }
         
-    else:
-        # Single series chart (existing logic)
-        x_values = parsed_data.get("x", ["Data"])
-        y_values = parsed_data.get("y", [1])
+        # Add secondary y-axis if we have difference
+        if len(traces) > len(teams):
+            layout['yaxis2'] = {
+                'title': 'Difference',
+                'overlaying': 'y',
+                'side': 'right',
+                'showgrid': False
+            }
         
-        traces = [{
+        return {'data': traces, 'layout': layout}
+    
+    # 📊 SINGLE SERIES DATA
+    elif data_type in ["single_series", "forecast_series", "forecast_data_series", 
+                       "time_series", "numeric_extraction", "key_value_pairs"]:
+        print("📊 Creating single-series visualization")
+        
+        x_data = parsed_data.get("x", [])
+        y_data = parsed_data.get("y", [])
+        
+        # Determine chart type based on data
+        if any(word in data_type for word in ["time", "forecast", "date"]):
+            chart_type = 'scatter'
+            mode = 'lines+markers'
+        else:
+            chart_type = 'bar' if len(x_data) <= 20 else 'scatter'
+            mode = 'markers' if chart_type == 'scatter' else None
+        
+        trace = {
+            'x': x_data,
+            'y': y_data,
+            'type': chart_type,
+            'name': parsed_data.get("title", "Data"),
+            'marker': {'color': colors[0], 'size': 8} if chart_type == 'scatter' else {'color': colors[0]},
+        }
+        
+        if mode:
+            trace['mode'] = mode
+            trace['line'] = {'color': colors[0], 'width': 3}
+        
+        layout = {
+            'title': {'text': parsed_data.get("title", "Data Visualization"), 'font': {'size': 16}},
+            'xaxis': {'title': 'X-Axis', 'showgrid': True},
+            'yaxis': {'title': 'Values', 'showgrid': True},
+            'hovermode': 'closest',
+            'showlegend': False
+        }
+        
+        return {'data': [trace], 'layout': layout}
+    
+    # 📈 SIMPLE LISTS AND NUMBERS
+    elif data_type in ["number_list", "string_frequency", "mixed_data", "dict_fallback"]:
+        print("📈 Creating simple data visualization")
+        
+        x_data = parsed_data.get("x", [])
+        y_data = parsed_data.get("y", [])
+        
+        # Use bar chart for categorical data
+        trace = {
+            'x': x_data,
+            'y': y_data,
+            'type': 'bar',
+            'name': parsed_data.get("title", "Data"),
+            'marker': {'color': colors[:len(x_data)] if len(x_data) <= len(colors) else colors[0]}
+        }
+        
+        layout = {
+            'title': {'text': parsed_data.get("title", "Data Overview"), 'font': {'size': 16}},
+            'xaxis': {'title': 'Categories', 'showgrid': True},
+            'yaxis': {'title': 'Values', 'showgrid': True},
+            'hovermode': 'closest',
+            'showlegend': False
+        }
+        
+        return {'data': [trace], 'layout': layout}
+    
+    # 🚨 EMERGENCY FALLBACK
+    else:
+        print(f"🚨 Creating emergency fallback for type: {data_type}")
+        
+        trace = {
+            'x': ['Data'],
+            'y': [1],
+            'type': 'bar',
+            'name': 'Data Present',
+            'marker': {'color': colors[0]}
+        }
+        
+        layout = {
+            'title': {'text': 'Data Visualization', 'font': {'size': 16}},
+            'xaxis': {'title': 'Data', 'showgrid': True},
+            'yaxis': {'title': 'Count', 'showgrid': True},
+            'showlegend': False
+        }
+        
+        return {'data': [trace], 'layout': layout}
+
+def create_emergency_chart(data_str: str, error_msg: str) -> Dict:
+    """
+    Create emergency chart when everything else fails
+    """
+    print(f"🚨 EMERGENCY CHART: {error_msg}")
+    
+    # Try to extract ANY numbers from the input
+    numbers = re.findall(r'-?\d*\.?\d+', str(data_str))
+    
+    if numbers and len(numbers) >= 2:
+        y_values = [float(n) for n in numbers[:10]]
+        x_values = [f"Value {i+1}" for i in range(len(y_values))]
+        
+        trace = {
             'x': x_values,
             'y': y_values,
             'type': 'scatter',
             'mode': 'lines+markers',
-            'name': 'Data Trend',
-            'line': {'color': colors[0], 'width': 3},
-            'marker': {'size': 8, 'color': colors[0]}
-        }]
-        
-        layout = {
-            'title': {
-                'text': parsed_data.get("title", "Data Visualization"),
-                'x': 0.5,
-                'font': {'size': 18, 'family': 'Arial, sans-serif'}
-            },
-            'xaxis': {
-                'title': 'Categories',
-                'showgrid': True,
-                'gridcolor': '#E1E5EA',
-                'tickfont': {'size': 12}
-            },
-            'yaxis': {
-                'title': 'Values',
-                'showgrid': True,
-                'gridcolor': '#E1E5EA',
-                'tickfont': {'size': 12}
-            },
-            'plot_bgcolor': 'white',
-            'paper_bgcolor': 'white',
-            'margin': {'t': 60, 'b': 60, 'l': 60, 'r': 40}
+            'name': 'Extracted Data',
+            'line': {'color': '#E74C3C', 'width': 3},
+            'marker': {'color': '#E74C3C', 'size': 8}
         }
-    
-    return {
-        'data': traces,
-        'layout': layout
-    }
-
-def create_emergency_chart(data_str: str, error_msg: str) -> Dict:
-    """
-    Emergency fallback chart that ALWAYS works
-    """
-    print(f"🚨 EMERGENCY CHART - Creating fallback for: {error_msg}")
-    
-    # Extract any numbers from the string as a last resort
-    numbers = re.findall(r'\d+', data_str)
-    if numbers:
-        y_values = [float(n) for n in numbers[:10]]
-        x_values = [f"Value {i+1}" for i in range(len(y_values))]
+        
+        title = f"Emergency Data Extraction ({len(y_values)} points)"
     else:
-        # Absolute minimum chart
-        x_values = ["Error", "Fallback", "Data"]
-        y_values = [1, 2, 1]
+        # Absolute emergency - just show that we received data
+        trace = {
+            'x': ['Input Received'],
+            'y': [len(str(data_str))],
+            'type': 'bar',
+            'name': 'Data Length',
+            'marker': {'color': '#FD7E14'}
+        }
+        
+        title = "Emergency Visualization"
+    
+    layout = {
+        'title': {'text': title, 'font': {'size': 16}},
+        'xaxis': {'title': 'Data Points', 'showgrid': True},
+        'yaxis': {'title': 'Values', 'showgrid': True},
+        'annotations': [{
+            'text': f"Error: {error_msg[:100]}{'...' if len(error_msg) > 100 else ''}",
+            'x': 0.5,
+            'y': 0.95,
+            'xref': 'paper',
+            'yref': 'paper',
+            'showarrow': False,
+            'font': {'color': 'red', 'size': 12}
+        }],
+        'showlegend': False
+    }
     
     return {
         'spec': {
-            'data': [{
-                'x': x_values,
-                'y': y_values,
-                'type': 'scatter',
-                'mode': 'lines+markers',
-                'name': 'Emergency Data',
-                'line': {'color': '#E74C3C', 'width': 2},
-                'marker': {'size': 6, 'color': '#E74C3C'}
-            }],
-            'layout': {
-                'title': {
-                    'text': f'Data Processing Error: {error_msg[:50]}...',
-                    'x': 0.5,
-                    'font': {'size': 16}
-                },
-                'xaxis': {'title': 'Index', 'showgrid': True},
-                'yaxis': {'title': 'Value', 'showgrid': True},
-                'plot_bgcolor': 'white',
-                'paper_bgcolor': 'white',
-                'margin': {'t': 60, 'b': 40, 'l': 60, 'r': 40}
-            }
+            'data': [trace],
+            'layout': layout
         }
     }
 
-def create_visualization_with_pandas(data_str: str) -> Dict:
-    """
-    Alternative visualization using pandas DataFrame + matplotlib
-    """
-    try:
-        print(f"\n🐼 PANDAS VIZ - Processing: {data_str[:200]}...")
-        
-        # Parse the data
-        parsed_data = smart_parse_any_format(data_str)
-        
-        # Extract data for DataFrame
-        x_data = parsed_data.get("x", ["Data"])
-        y_data = parsed_data.get("y", [1])
-        title = parsed_data.get("title", "Data Visualization")
-        
-        print(f"📊 DataFrame data: {len(x_data)} points")
-        print(f"📋 Sample: {x_data[:3]} -> {y_data[:3]}")
-        
-        # Create DataFrame
-        df = pd.DataFrame({
-            'x': x_data,
-            'y': y_data
-        })
-        
-        # Create the plot
-        plt.figure(figsize=(12, 6))
-        
-        # Plot based on data type
-        if parsed_data.get("type") in ["forecast_data_series", "forecast_series"]:
-            # Time series plot
-            df.plot(x='x', y='y', kind='line', marker='o', linewidth=3, markersize=8, color='#2E86C1')
-            plt.xticks(rotation=45)
-        else:
-            # Bar plot for other data
-            df.plot(x='x', y='y', kind='bar', color='#2E86C1')
-            plt.xticks(rotation=45)
-        
-        plt.title(title, fontsize=16, fontweight='bold')
-        plt.xlabel('Date' if 'date' in title.lower() or 'forecast' in title.lower() else 'Categories')
-        plt.ylabel('Volume' if 'forecast' in title.lower() else 'Values')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        
-        # Convert to base64 PNG
-        buffer = io.BytesIO()
-        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-        buffer.seek(0)
-        png_base64 = base64.b64encode(buffer.getvalue()).decode()
-        plt.close()  # Important: close to free memory
-        
-        print(f"✅ PANDAS VIZ SUCCESS - Created PNG chart")
-        
-        return {
-            'type': 'pandas_chart',
-            'png_base64': png_base64,
-            'title': title,
-            'data_points': len(x_data)
-        }
-        
-    except Exception as e:
-        print(f"⚠️ PANDAS VIZ ERROR: {e}")
-        return create_emergency_chart(data_str, str(e))
-
 def create_agent():
     """
-    Creates a Data Visualization Agent that can handle any data format
+    Create the universal data visualization agent
     """
-    visualization_agent = ConversableAgent(
+    agent = ConversableAgent(
         name="Data-Visualization-Agent",
-        llm_config=llm_config,
         system_message=visualization_agent_system_message,
-        function_map={
-            "create_visualization": create_visualization,
-            "create_visualization_with_pandas": create_visualization_with_pandas
-        },
+        llm_config=llm_config,
         human_input_mode="NEVER",
-        max_consecutive_auto_reply=5,
-        is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
     )
     
-    return visualization_agent 
+    # Register the universal visualization function
+    agent.register_for_execution()(create_visualization)
+    agent.register_for_llm(description="Create visualization from ANY data format")(create_visualization)
+    
+    return agent 

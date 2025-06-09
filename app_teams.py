@@ -1046,6 +1046,141 @@ Displaying raw data instead."""
                       "[data-visualization-agent]" in content.lower() or
                       content.lower().startswith("data-visualization-agent")):
                     explicit_delegation = True
+                    
+                    # 🎯 CRITICAL FIX: Check for explicit data in orchestrator's delegation message FIRST
+                    print("🎨 AUDIT - INTERCEPTING VISUALIZATION DELEGATION:")
+                    print("   🔍 Checking for explicit data in delegation message...")
+                    
+                    # Extract the orchestrator's delegation content
+                    delegation_content = response.get("content", "").lower()
+                    print(f"🎯 DELEGATION CONTENT: {delegation_content}")
+                    
+                    # 📊 PATTERN 1: Check for explicit KPI data in delegation message
+                    kpi_pattern_found = False
+                    if any(kpi_word in delegation_content for kpi_word in ["kpi", "attrition", "rate", "percentage", "%"]):
+                        print("🔍 AUDIT - Found KPI-related keywords in delegation")
+                        
+                        # Extract KPI data from the delegation message
+                        import re
+                        # Look for patterns like "January 2025 (9.92%)", "February 2025 (6.81%)", etc.
+                        # ENHANCED: Also look for "January 2025: 9.92%" or "9.92%" anywhere
+                        kpi_pattern = r'(\w+ \d{4})\s*[\(:]*([0-9.]+)%?[\)]*'
+                        kpi_matches = re.findall(kpi_pattern, response.get("content", ""))  # Use original response content, not lowercase
+                        
+                        print(f"🔍 AUDIT - Testing KPI pattern on: '{response.get('content', '')[:200]}...'")
+                        print(f"🔍 AUDIT - KPI matches found: {kpi_matches}")
+                        
+                        if kpi_matches:
+                            print(f"✅ AUDIT - Found {len(kpi_matches)} KPI data points in delegation:")
+                            
+                            # Create visualization data from extracted KPI points
+                            kpi_chart_data = []
+                            for month_year, value in kpi_matches:
+                                kpi_chart_data.append({
+                                    "date": month_year,
+                                    "value": float(value),
+                                    "metric": "Home Loan Attrition Rate"
+                                })
+                                print(f"   📊 {month_year}: {value}%")
+                            
+                            if len(kpi_chart_data) >= 2:  # Need at least 2 points for a chart
+                                kpi_pattern_found = True
+                                
+                                # Create visualization JSON for KPI data
+                                viz_data = {
+                                    "data_type": "kpi",
+                                    "kpi_data": kpi_chart_data,
+                                    "title": "Home Loan Attrition Rate - Monthly Trend",
+                                    "departments": ["Home Loan"]
+                                }
+                                
+                                import json
+                                json_data = json.dumps(viz_data)
+                                
+                                print(f"📊 AUDIT - KPI VISUALIZATION DATA CREATED FROM DELEGATION:")
+                                print(f"   📦 JSON size: {len(json_data)} characters")
+                                print(f"   📊 Data points: {len(kpi_chart_data)}")
+                                print(f"   📋 Preview: {json_data[:200]}...")
+                                
+                                # Call visualization function directly with delegation data
+                                viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
+                                
+                                if hasattr(viz_agent, "function_map") and "create_visualization" in viz_agent.function_map:
+                                    print(f"🎨 AUDIT - CALLING VISUALIZATION WITH DELEGATION DATA")
+                                    
+                                    viz_func = viz_agent.function_map["create_visualization"]
+                                    viz_result = viz_func(json_data)
+                                    
+                                    print(f"✅ AUDIT - DELEGATION DATA VISUALIZATION RESULT:")
+                                    print(f"   📊 Result type: {type(viz_result)}")
+                                    print(f"   📋 Result preview: {str(viz_result)[:200]}...")
+                                    
+                                    viz_response = {
+                                        "role": "function",
+                                        "name": "create_visualization",
+                                        "content": str(viz_result)
+                                    }
+                                    
+                                    await self.send_message(viz_response, viz_agent.name)
+                                    print("✅ AUDIT - Successfully created visualization from delegation data!")
+                                    return  # Exit after handling delegation data
+                                else:
+                                    print("❌ AUDIT - Visualization function not found in function_map")
+                            else:
+                                print(f"⚠️ AUDIT - Not enough KPI data points: {len(kpi_chart_data)}")
+                        else:
+                            print("⚠️ AUDIT - No KPI matches found with regex pattern")
+                    
+                    # 📊 PATTERN 2: Check for explicit forecast data in delegation message
+                    if not kpi_pattern_found:
+                        # Look for forecast patterns like "2025-01: 450, 2025-02: 520"
+                        forecast_pattern = r'(\d{4}-\d{2})[:\s]*([0-9,]+)'
+                        forecast_matches = re.findall(forecast_pattern, delegation_content)
+                        
+                        if forecast_matches:
+                            print(f"✅ AUDIT - Found {len(forecast_matches)} forecast data points in delegation")
+                            
+                            forecast_chart_data = []
+                            for date, value in forecast_matches:
+                                # Clean up value (remove commas)
+                                clean_value = value.replace(',', '')
+                                if clean_value.isdigit():
+                                    forecast_chart_data.append({
+                                        "date": date,
+                                        "value": int(clean_value)
+                                    })
+                            
+                            if len(forecast_chart_data) >= 2:
+                                viz_data = {
+                                    "data_type": "forecast",
+                                    "forecast_data": forecast_chart_data,
+                                    "title": "Forecast Data from Delegation"
+                                }
+                                
+                                import json
+                                json_data = json.dumps(viz_data)
+                                
+                                # Call visualization function
+                                viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
+                                
+                                if hasattr(viz_agent, "function_map") and "create_visualization" in viz_agent.function_map:
+                                    viz_func = viz_agent.function_map["create_visualization"]
+                                    viz_result = viz_func(json_data)
+                                    
+                                    viz_response = {
+                                        "role": "function",
+                                        "name": "create_visualization",
+                                        "content": str(viz_result)
+                                    }
+                                    
+                                    await self.send_message(viz_response, viz_agent.name)
+                                    print("✅ AUDIT - Successfully created forecast visualization from delegation data!")
+                                    return
+                    
+                    # 🔄 FALLBACK: If no explicit data found in delegation, use vector data store logic
+                    if not kpi_pattern_found:
+                        print("🔍 AUDIT - No explicit data in delegation, falling back to vector data store logic")
+                        
                     # Delegate to Data-Visualization-Agent with INTELLIGENT QUERY
                     print("🎨 AUDIT - INTERCEPTING VISUALIZATION DELEGATION:")
                     print("   🧠 Using intelligent vector data store query with enhanced audit logging")
@@ -1655,9 +1790,116 @@ Just tell me what you'd like to do! For example, you could ask:
 * "What's the home-loan attrition rate?"
 * "Run a simulation to see if we can handle a 20% increase in demand." """
             
-            # Handle function calls in the reply (identical to original logic)
+            # Handle function calls in the reply (enhanced for AutoGen 2.x tool_calls)
             if isinstance(reply, dict):
-                # First check for direct function_call
+                # NEW: Handle AutoGen 2.x tool_calls format
+                if reply.get("tool_calls"):
+                    tool_calls = reply["tool_calls"]
+                    print(f"⚙️ {agent.name} making {len(tool_calls)} tool call(s)")
+                    
+                    tool_results = []
+                    for tool_call in tool_calls:
+                        tool_id = tool_call.get("id", "unknown")
+                        function_info = tool_call.get("function", {})
+                        func_name = function_info.get("name")
+                        args_str = function_info.get("arguments", "{}")
+                        
+                        print(f"🔧 Executing tool: {func_name} with args: {args_str}")
+                        
+                        # Get the registered function from the agent
+                        if hasattr(agent, '_function_map') and func_name in agent._function_map:
+                            func = agent._function_map[func_name]
+                            try:
+                                # Parse arguments
+                                import json
+                                args_dict = json.loads(args_str) if args_str else {}
+                                
+                                # Execute function with proper arguments
+                                if len(args_dict) == 1:
+                                    # Single argument - pass the value directly
+                                    arg_value = list(args_dict.values())[0]
+                                    result = func(arg_value)
+                                else:
+                                    # Multiple arguments - pass as kwargs
+                                    result = func(**args_dict)
+                                
+                                print(f"✅ Tool execution result: {str(result)[:200]}...")
+                                
+                                # Format result
+                                if isinstance(result, dict):
+                                    if 'results' in result:
+                                        tool_result = str(result['results'])
+                                    elif 'error' in result:
+                                        tool_result = f"Error: {result['error']}"
+                                    else:
+                                        tool_result = str(result)
+                                else:
+                                    tool_result = str(result)
+                                    
+                                tool_results.append({
+                                    "tool_call_id": tool_id,
+                                    "role": "tool",
+                                    "name": func_name,
+                                    "content": tool_result
+                                })
+                                
+                            except Exception as e:
+                                print(f"❌ Tool execution error: {e}")
+                                tool_results.append({
+                                    "tool_call_id": tool_id,
+                                    "role": "tool", 
+                                    "name": func_name,
+                                    "content": f"Error executing tool: {str(e)}"
+                                })
+                        else:
+                            print(f"⚠️ Tool function {func_name} not found in agent._function_map")
+                            tool_results.append({
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": func_name,
+                                "content": f"Error: Function {func_name} not available"
+                            })
+                    
+                    # Now get a follow-up response from the agent incorporating the tool results
+                    if tool_results:
+                        # Add tool call and results to message history
+                        updated_messages = clean_messages + [
+                            {
+                                "role": "assistant",
+                                "content": reply.get("content", ""),
+                                "tool_calls": tool_calls
+                            }
+                        ] + tool_results
+                        
+                        print(f"🔄 Getting follow-up response from {agent.name} after tool execution")
+                        
+                        # Get agent's response incorporating tool results
+                        if hasattr(agent, 'a_generate_reply'):
+                            follow_up_reply = await agent.a_generate_reply(
+                                messages=updated_messages,
+                                sender=last_agent or self.user_agent
+                            )
+                        else:
+                            follow_up_reply = agent.generate_reply(
+                                messages=updated_messages,
+                                sender=last_agent or self.user_agent
+                            )
+                        
+                        print(f"✅ Follow-up reply from {agent.name}: {str(follow_up_reply)[:200]}...")
+                        
+                        # Return the follow-up response
+                        if isinstance(follow_up_reply, dict):
+                            return {
+                                "role": "assistant",
+                                "content": follow_up_reply.get("content", "")
+                            }
+                        else:
+                            return {
+                                "role": "assistant", 
+                                "content": str(follow_up_reply)
+                            }
+                
+                # EXISTING: Handle old-style function_call for backward compatibility
                 if reply.get("function_call"):
                     function_call = reply["function_call"]
                     if hasattr(agent, "function_map"):

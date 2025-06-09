@@ -34,6 +34,17 @@ def get_date_filter(query: str) -> dict:
     
     query_lower = query.lower()
     
+    # Handle "as of today", "today", "current", "now", "this month"
+    if any(phrase in query_lower for phrase in ["as of today", "today", "current", "now", "this month", "current month"]):
+        try:
+            # Use current month's first day
+            current_month = current_date.replace(day=1)
+            date_str = current_month.strftime("%Y-%m-%d")
+            print(f"Debug - Current date query, using: {date_str}")
+            return {"created_date": date_str}
+        except Exception as e:
+            print(f"Debug - Error parsing current date: {str(e)}")
+    
     # Handle orchestrator's month-YYYY-MM-DD format
     if "month-" in query_lower:
         try:
@@ -289,7 +300,12 @@ def fetch_kpi(query_str: str) -> Dict:
         print(f"🔥 RAW QUERY LOWER: {query_lower}")
         
         # Handle natural language queries directly with dynamic number extraction
-        if any(phrase in query_lower for phrase in ["last month", "previous month"]):
+        if any(phrase in query_lower for phrase in ["as of today", "today", "current", "now", "this month", "current month"]):
+            current_date = datetime.now()
+            current_month = current_date.replace(day=1)
+            date_filter = {"created_date": current_month.strftime("%Y-%m-%d")}
+            print(f"🔥 RAW DATE FILTER (current/today): {date_filter}")
+        elif any(phrase in query_lower for phrase in ["last month", "previous month"]):
             current_date = datetime.now()
             last_month = current_date.replace(day=1) - relativedelta(months=1)
             date_filter = {"created_date": last_month.strftime("%Y-%m-%d")}
@@ -642,8 +658,10 @@ def create_agent():
         system_message=kpi_agent_system_message,
         is_termination_msg=lambda x: "TERMINATE" in x.get("content", ""),
         human_input_mode="NEVER",
-        function_map={
-            "fetch_kpi": fetch_kpi
-        }
     )
+    
+    # Register the fetch_kpi function properly with AutoGen
+    kpi_agent.register_for_execution()(fetch_kpi)
+    kpi_agent.register_for_llm(description="Fetch KPI data based on user query with date filtering")(fetch_kpi)
+    
     return kpi_agent 
