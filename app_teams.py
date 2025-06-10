@@ -20,6 +20,7 @@ import chromadb
 from chromadb.config import Settings
 from datetime import datetime
 import json
+import re
 from vector_database.chroma import get_chroma_client
 import time
 import plotly.graph_objects as go
@@ -792,10 +793,24 @@ class GroupChat:
                                                 
                                                 # Apply layout from spec
                                                 layout = spec_data.get('layout', {})
+                                                # Fix: Handle case where layout.title might be a string instead of dict
+                                                if isinstance(layout, dict):
+                                                    title_value = layout.get('title', 'Chart')
+                                                    if isinstance(title_value, dict):
+                                                        chart_title = title_value.get('text', 'Chart')
+                                                    else:
+                                                        chart_title = str(title_value)
+                                                    xaxis_title = layout.get('xaxis', {}).get('title', 'X-axis') if isinstance(layout.get('xaxis'), dict) else 'X-axis'
+                                                    yaxis_title = layout.get('yaxis', {}).get('title', 'Y-axis') if isinstance(layout.get('yaxis'), dict) else 'Y-axis'
+                                                else:
+                                                    chart_title = 'Chart'
+                                                    xaxis_title = 'X-axis'
+                                                    yaxis_title = 'Y-axis'
+                                                
                                                 fig.update_layout(
-                                                    title=layout.get('title', {}).get('text', 'Chart'),
-                                                    xaxis_title=layout.get('xaxis', {}).get('title', 'X-axis'),
-                                                    yaxis_title=layout.get('yaxis', {}).get('title', 'Y-axis'),
+                                                    title=chart_title,
+                                                    xaxis_title=xaxis_title,
+                                                    yaxis_title=yaxis_title,
                                                     width=800,
                                                     height=500,
                                                     plot_bgcolor='white',
@@ -836,7 +851,15 @@ class GroupChat:
                                                 # ✅ TEAMS FIX: Use simpler text-based visualization instead of base64 images
                                                 # This avoids the "Unknown attachment type" error in Teams
                                                 spec_layout = spec_data.get('layout', {})
-                                                chart_title = spec_layout.get('title', {}).get('text', 'Data Visualization')
+                                                # Fix: Handle case where layout.title might be a string instead of dict
+                                                if isinstance(spec_layout, dict):
+                                                    title_value = spec_layout.get('title', 'Data Visualization')
+                                                    if isinstance(title_value, dict):
+                                                        chart_title = title_value.get('text', 'Data Visualization')
+                                                    else:
+                                                        chart_title = str(title_value)
+                                                else:
+                                                    chart_title = 'Data Visualization'
                                                 
                                                 # Extract data from the chart spec
                                                 chart_data_list = spec_data.get('data', [])
@@ -1047,139 +1070,43 @@ Displaying raw data instead."""
                       content.lower().startswith("data-visualization-agent")):
                     explicit_delegation = True
                     
-                    # 🎯 CRITICAL FIX: Check for explicit data in orchestrator's delegation message FIRST
-                    print("🎨 AUDIT - INTERCEPTING VISUALIZATION DELEGATION:")
-                    print("   🔍 Checking for explicit data in delegation message...")
+                    # 🎨 INTELLIGENT APPROACH: Let the AI agent handle ALL data parsing and visualization choice
+                    print("🎨 INTELLIGENT VISUALIZATION DELEGATION:")
+                    print("   🧠 Letting AI agent intelligently handle data parsing and chart selection")
                     
-                    # Extract the orchestrator's delegation content
-                    delegation_content = response.get("content", "").lower()
-                    print(f"🎯 DELEGATION CONTENT: {delegation_content}")
+                    # Get the orchestrator's complete message with data
+                    full_delegation_content = response.get("content", "")
+                    print(f"🎯 DELEGATION CONTENT: {full_delegation_content}")
                     
-                    # 📊 PATTERN 1: Check for explicit KPI data in delegation message
-                    kpi_pattern_found = False
-                    if any(kpi_word in delegation_content for kpi_word in ["kpi", "attrition", "rate", "percentage", "%"]):
-                        print("🔍 AUDIT - Found KPI-related keywords in delegation")
-                        
-                        # Extract KPI data from the delegation message
-                        import re
-                        # Look for patterns like "January 2025 (9.92%)", "February 2025 (6.81%)", etc.
-                        # ENHANCED: Also look for "January 2025: 9.92%" or "9.92%" anywhere
-                        kpi_pattern = r'(\w+ \d{4})\s*[\(:]*([0-9.]+)%?[\)]*'
-                        kpi_matches = re.findall(kpi_pattern, response.get("content", ""))  # Use original response content, not lowercase
-                        
-                        print(f"🔍 AUDIT - Testing KPI pattern on: '{response.get('content', '')[:200]}...'")
-                        print(f"🔍 AUDIT - KPI matches found: {kpi_matches}")
-                        
-                        if kpi_matches:
-                            print(f"✅ AUDIT - Found {len(kpi_matches)} KPI data points in delegation:")
-                            
-                            # Create visualization data from extracted KPI points
-                            kpi_chart_data = []
-                            for month_year, value in kpi_matches:
-                                kpi_chart_data.append({
-                                    "date": month_year,
-                                    "value": float(value),
-                                    "metric": "Home Loan Attrition Rate"
-                                })
-                                print(f"   📊 {month_year}: {value}%")
-                            
-                            if len(kpi_chart_data) >= 2:  # Need at least 2 points for a chart
-                                kpi_pattern_found = True
-                                
-                                # Create visualization JSON for KPI data
-                                viz_data = {
-                                    "data_type": "kpi",
-                                    "kpi_data": kpi_chart_data,
-                                    "title": "Home Loan Attrition Rate - Monthly Trend",
-                                    "departments": ["Home Loan"]
-                                }
-                                
-                                import json
-                                json_data = json.dumps(viz_data)
-                                
-                                print(f"📊 AUDIT - KPI VISUALIZATION DATA CREATED FROM DELEGATION:")
-                                print(f"   📦 JSON size: {len(json_data)} characters")
-                                print(f"   📊 Data points: {len(kpi_chart_data)}")
-                                print(f"   📋 Preview: {json_data[:200]}...")
-                                
-                                # Call visualization function directly with delegation data
-                                viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
-                                
-                                if hasattr(viz_agent, "function_map") and "create_visualization" in viz_agent.function_map:
-                                    print(f"🎨 AUDIT - CALLING VISUALIZATION WITH DELEGATION DATA")
-                                    
-                                    viz_func = viz_agent.function_map["create_visualization"]
-                                    viz_result = viz_func(json_data)
-                                    
-                                    print(f"✅ AUDIT - DELEGATION DATA VISUALIZATION RESULT:")
-                                    print(f"   📊 Result type: {type(viz_result)}")
-                                    print(f"   📋 Result preview: {str(viz_result)[:200]}...")
-                                    
-                                    viz_response = {
-                                        "role": "function",
-                                        "name": "create_visualization",
-                                        "content": str(viz_result)
-                                    }
-                                    
-                                    await self.send_message(viz_response, viz_agent.name)
-                                    print("✅ AUDIT - Successfully created visualization from delegation data!")
-                                    return  # Exit after handling delegation data
-                                else:
-                                    print("❌ AUDIT - Visualization function not found in function_map")
-                            else:
-                                print(f"⚠️ AUDIT - Not enough KPI data points: {len(kpi_chart_data)}")
-                        else:
-                            print("⚠️ AUDIT - No KPI matches found with regex pattern")
+                    # Simply delegate to the intelligent visualization agent with the complete message
+                    viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
                     
-                    # 📊 PATTERN 2: Check for explicit forecast data in delegation message
-                    if not kpi_pattern_found:
-                        # Look for forecast patterns like "2025-01: 450, 2025-02: 520"
-                        forecast_pattern = r'(\d{4}-\d{2})[:\s]*([0-9,]+)'
-                        forecast_matches = re.findall(forecast_pattern, delegation_content)
+                    if hasattr(viz_agent, "function_map") and "create_visualization" in viz_agent.function_map:
+                        print(f"🎨 CALLING INTELLIGENT VISUALIZATION AGENT")
                         
-                        if forecast_matches:
-                            print(f"✅ AUDIT - Found {len(forecast_matches)} forecast data points in delegation")
-                            
-                            forecast_chart_data = []
-                            for date, value in forecast_matches:
-                                # Clean up value (remove commas)
-                                clean_value = value.replace(',', '')
-                                if clean_value.isdigit():
-                                    forecast_chart_data.append({
-                                        "date": date,
-                                        "value": int(clean_value)
-                                    })
-                            
-                            if len(forecast_chart_data) >= 2:
-                                viz_data = {
-                                    "data_type": "forecast",
-                                    "forecast_data": forecast_chart_data,
-                                    "title": "Forecast Data from Delegation"
-                                }
-                                
-                                import json
-                                json_data = json.dumps(viz_data)
-                                
-                                # Call visualization function
-                                viz_agent = next(a for a in self.agents if a.name == "Data-Visualization-Agent")
-                                
-                                if hasattr(viz_agent, "function_map") and "create_visualization" in viz_agent.function_map:
-                                    viz_func = viz_agent.function_map["create_visualization"]
-                                    viz_result = viz_func(json_data)
-                                    
-                                    viz_response = {
-                                        "role": "function",
-                                        "name": "create_visualization",
-                                        "content": str(viz_result)
-                                    }
-                                    
-                                    await self.send_message(viz_response, viz_agent.name)
-                                    print("✅ AUDIT - Successfully created forecast visualization from delegation data!")
-                                    return
-                    
-                    # 🔄 FALLBACK: If no explicit data found in delegation, use vector data store logic
-                    if not kpi_pattern_found:
-                        print("🔍 AUDIT - No explicit data in delegation, falling back to vector data store logic")
+                        # Pass the complete delegation content to the intelligent agent
+                        # It will parse, analyze, and choose the best visualization automatically
+                        viz_func = viz_agent.function_map["create_visualization"]
+                        viz_result = viz_func(full_delegation_content)
+                        
+                        print(f"✅ INTELLIGENT VISUALIZATION RESULT:")
+                        print(f"   📊 Result type: {type(viz_result)}")
+                        print(f"   📋 Result preview: {str(viz_result)[:200]}...")
+                        
+                        viz_response = {
+                            "role": "function",
+                            "name": "create_visualization",
+                            "content": str(viz_result)
+                        }
+                        
+                        await self.send_message(viz_response, viz_agent.name)
+                        print("✅ INTELLIGENT AGENT - Successfully created visualization!")
+                        return  # Exit after successful intelligent processing
+                    else:
+                        print("❌ Visualization function not found in function_map")
+                        
+                    # 🔄 FALLBACK: If intelligent processing failed, use vector data store logic
+                    print("🔍 FALLBACK - Using vector data store logic")
                         
                     # Delegate to Data-Visualization-Agent with INTELLIGENT QUERY
                     print("🎨 AUDIT - INTERCEPTING VISUALIZATION DELEGATION:")
@@ -2083,10 +2010,22 @@ Just tell me what you'd like to do! For example, you could ask:
                 comparison_keywords = [
                     "compare", "comparison", "vs", "versus", "both", 
                     "side by side", "together", "against", "difference",
-                    "delta", "chart with", "plot both", "show both"
+                    "delta", "chart with", "plot both", "show both",
+                    "and the", "for both", "between", "two", "multiple"
                 ]
                 
-                if any(keyword in content for keyword in comparison_keywords):
+                # Special handling for orchestrator patterns
+                orchestrator_patterns = [
+                    "plot.*both", "plot.*and", "forecast.*for.*both",
+                    "logistics.*retail", "retail.*logistics"
+                ]
+                
+                is_comparison = (
+                    any(keyword in content for keyword in comparison_keywords) or
+                    any(re.search(pattern, content, re.IGNORECASE) for pattern in orchestrator_patterns)
+                )
+                
+                if is_comparison:
                     intent["comparison_mode"] = True
                     print(f"🔄 AUDIT - COMPARISON MODE DETECTED in: '{content}'")
                     
@@ -2521,30 +2460,31 @@ async def on_chat_start():
     cl.user_session.set('teams_session_id', session_id)
     cl.user_session.set('teams_session_data', session_data)
     
+    # 🚫 DISABLED: Welcome message commented out per user request
     # Only send welcome message for NEW sessions (check the is_new flag)
     if session_data.get('is_new', False):
-        welcome_msg = f"""🚀 **AI-Analyst**
+        # welcome_msg = f"""🚀 **AI-Analyst**
 
-📱 Welcome to Teams integration!
-🆔 Session ID: `{session_id}`
+# 📱 Welcome to Teams integration!
+# 🆔 Session ID: `{session_id}`
 
-**Available Operations:**
-• 📊 **Forecast data**: "Get forecast for retail team"
-• 📋 **KPI metrics**: "Show KPI for last month"  
-• 📈 **Visualizations**: "Create chart for Q1 data"
-• 🎮 **Simulations**: "Run workforce simulation"
+# **Available Operations:**
+# • 📊 **Forecast data**: "Get forecast for retail team"
+# • 📋 **KPI metrics**: "Show KPI for last month"  
+# • 📈 **Visualizations**: "Create chart for Q1 data"
+# • 🎮 **Simulations**: "Run workforce simulation"
 
-**Quick Commands:**
-• Type `help` for detailed commands
-• Type `reset` to clear session context
-• Type `status` to see current session info
+# **Quick Commands:**
+# • Type `help` for detailed commands
+# • Type `reset` to clear session context
+# • Type `status` to see current session info
 
-Ready to assist with your workforce management needs! 🎯
-"""
-        await cl.Message(content=welcome_msg).send()
-        print(f"📨 Sent welcome message for new session: {session_id}")
+# Ready to assist with your workforce management needs! 🎯
+# """
+        # await cl.Message(content=welcome_msg).send()
+        print(f"📨 Welcome message disabled - no UI message sent for session: {session_id}")
         
-        # Mark session as no longer new after sending welcome message
+        # Mark session as no longer new after login (but no welcome message)
         session_data['is_new'] = False
     else:
         # For existing sessions, just log the continuation (no UI message)

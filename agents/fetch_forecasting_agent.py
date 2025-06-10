@@ -48,60 +48,72 @@ def fetch_forecast(args):
             print("🔥 RAW STRING PROCESSING")
             original_user_request = args  # Store original for conversational agent
             
-            # Convert to lowercase for easier parsing
-            args_lower = args.lower()
-            
-            # Method 1: Try simple space-separated format first (backwards compatibility)
-            parts = args.strip().split()
-            if len(parts) == 3 and not any(word in args_lower for word in ['business', 'substream', 'team', 'is', 'and', '"']):
-                business_type = parts[0].replace('business-', '')
-                substream_type = parts[1].replace('substream-', '')
-                team_name = parts[2].replace('team-', '')
-                print(f"🔥 RAW SIMPLE FORMAT: business={business_type}, substream={substream_type}, team={team_name}")
-            else:
-                # Method 2: Parse natural language format
-                import re
+            # Method 1: Try JSON parsing first (for agent function calls)
+            import json
+            try:
+                json_args = json.loads(args.strip())
+                print("🔥 RAW JSON PARSING - Success!")
+                print(f"   🔑 JSON Keys: {list(json_args.keys())}")
+                business_type = json_args.get('business') or json_args.get('business_type')
+                substream_type = json_args.get('substream') or json_args.get('substream_type') or json_args.get('stream')
+                team_name = json_args.get('team') or json_args.get('team_name')
+                print(f"🔥 RAW JSON EXTRACTED: business={business_type}, substream={substream_type}, team={team_name}")
+            except (json.JSONDecodeError, ValueError):
+                print("🔥 RAW JSON PARSING - Failed, trying other methods")
+                # Convert to lowercase for easier parsing
+                args_lower = args.lower()
                 
-                # Extract business - multiple patterns
-                business_patterns = [
-                    r'business\s+is\s+["\']?([^"\'",\s]+)["\']?',
-                    r'business\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?',
-                    r'business\s+["\']?([^"\'",\s]+)["\']?'
-                ]
-                for pattern in business_patterns:
-                    match = re.search(pattern, args_lower)
-                    if match:
-                        business_type = match.group(1)
-                        break
-                
-                # Extract substream - multiple patterns  
-                substream_patterns = [
-                    r'substream\s+is\s+["\']?([^"\'",\s]+)["\']?',
-                    r'substream\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?',
-                    r'substream\s+["\']?([^"\'",\s]+)["\']?',
-                    r'stream\s+is\s+["\']?([^"\'",\s]+)["\']?',
-                    r'stream\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?'
-                ]
-                for pattern in substream_patterns:
-                    match = re.search(pattern, args_lower)
-                    if match:
-                        substream_type = match.group(1)
-                        break
-                
-                # Extract team - multiple patterns
-                team_patterns = [
-                    r'team\s+name\s+is\s+["\']?([^"\'",\s]+)["\']?',
-                    r'team\s+is\s+["\']?([^"\'",\s]+)["\']?',
-                    r'team\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?',
-                    r'team\s+["\']?([^"\'",\s]+)["\']?'
-                ]
-                for pattern in team_patterns:
-                    match = re.search(pattern, args_lower)
-                    if match:
-                        team_name = match.group(1)
-                        break
-                
-                print(f"🔥 RAW NLP PARSING: business={business_type}, substream={substream_type}, team={team_name}")
+                # Method 2: Try simple space-separated format (backwards compatibility)
+                parts = args.strip().split()
+                if len(parts) == 3 and not any(word in args_lower for word in ['business', 'substream', 'team', 'is', 'and', '"']):
+                    business_type = parts[0].replace('business-', '')
+                    substream_type = parts[1].replace('substream-', '')
+                    team_name = parts[2].replace('team-', '')
+                    print(f"🔥 RAW SIMPLE FORMAT: business={business_type}, substream={substream_type}, team={team_name}")
+                else:
+                    # Method 3: Parse natural language format
+                    import re
+                    
+                    # Extract business - multiple patterns
+                    business_patterns = [
+                        r'business\s+is\s+["\']?([^"\'",\s]+)["\']?',
+                        r'business\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?',
+                        r'business\s+["\']?([^"\'",\s]+)["\']?'
+                    ]
+                    for pattern in business_patterns:
+                        match = re.search(pattern, args_lower)
+                        if match:
+                            business_type = match.group(1)
+                            break
+                    
+                    # Extract substream - multiple patterns  
+                    substream_patterns = [
+                        r'substream\s+is\s+["\']?([^"\'",\s]+)["\']?',
+                        r'substream\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?',
+                        r'substream\s+["\']?([^"\'",\s]+)["\']?',
+                        r'stream\s+is\s+["\']?([^"\'",\s]+)["\']?',
+                        r'stream\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?'
+                    ]
+                    for pattern in substream_patterns:
+                        match = re.search(pattern, args_lower)
+                        if match:
+                            substream_type = match.group(1)
+                            break
+                    
+                    # Extract team - multiple patterns
+                    team_patterns = [
+                        r'team\s+name\s+is\s+["\']?([^"\'",\s]+)["\']?',
+                        r'team\s+is\s+["\']?([^"\'",\s]+)["\']?',
+                        r'team\s*[:\-=]\s*["\']?([^"\'",\s]+)["\']?',
+                        r'team\s+["\']?([^"\'",\s]+)["\']?'
+                    ]
+                    for pattern in team_patterns:
+                        match = re.search(pattern, args_lower)
+                        if match:
+                            team_name = match.group(1)
+                            break
+                    
+                    print(f"🔥 RAW NLP PARSING: business={business_type}, substream={substream_type}, team={team_name}")
         
         else:
             return f'Invalid argument type: {type(args)}. Expected string or dictionary.'
