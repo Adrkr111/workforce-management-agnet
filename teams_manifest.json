@@ -1,0 +1,180 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "2.0.0",
+  "id": "YOUR_APP_ID_HERE",
+  "packageName": "com.company.workforcemanagement",
+  "developer": {
+    "name": "Your Company",
+    "websiteUrl": "https://your-company.com",
+    "privacyUrl": "https://your-company.com/privacy",
+    "termsOfUseUrl": "https://your-company.com/terms"
+  },
+  "icons": {
+    "color": "icon-color.png",
+    "outline": "icon-outline.png"
+  },
+  "name": {
+    "short": "Workforce Management",
+    "full": "Enterprise Workforce Management Agent System"
+  },
+  "description": {
+    "short": "AI-powered workforce analytics & optimization assistant",
+    "full": "Enterprise-grade workforce management assistant powered by multi-agent AI system. Provides volume forecasting, KPI analytics, data visualization, and workforce simulations with Google Gemini LLM and ChromaDB vector database."
+  },
+  "accentColor": "#1976D2",
+  "bots": [
+    {
+      "botId": "YOUR_BOT_APP_ID_HERE",
+      "scopes": [
+        "personal",
+        "team",
+        "groupchat"
+      ],
+      "commandLists": [
+        {
+          "scopes": [
+            "personal",
+            "team",
+            "groupchat"
+          ],
+          "commands": [
+            {
+              "title": "Get Forecast",
+              "description": "Get workforce volume forecasts for teams"
+            },
+            {
+              "title": "View KPIs",
+              "description": "View performance metrics and KPI trends"
+            },
+            {
+              "title": "Create Visualization",
+              "description": "Generate interactive charts and visualizations"
+            },
+            {
+              "title": "Run Simulation",
+              "description": "Run workforce capacity simulations"
+            },
+            {
+              "title": "Help",
+              "description": "Get help with workforce management queries"
+            }
+          ]
+        }
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "composeExtensions": [
+    {
+      "botId": "YOUR_BOT_APP_ID_HERE",
+      "commands": [
+        {
+          "id": "forecast",
+          "context": [
+            "compose",
+            "commandBox"
+          ],
+          "description": "Get workforce forecast data",
+          "title": "Workforce Forecast",
+          "type": "query",
+          "parameters": [
+            {
+              "name": "business",
+              "title": "Business Unit",
+              "description": "Enter business unit (e.g., logistics)",
+              "inputType": "text"
+            },
+            {
+              "name": "substream", 
+              "title": "Substream",
+              "description": "Enter substream (e.g., dlt)",
+              "inputType": "text"
+            },
+            {
+              "name": "team",
+              "title": "Team",
+              "description": "Enter team name (e.g., support)",
+              "inputType": "text"
+            }
+          ]
+        },
+        {
+          "id": "kpi",
+          "context": [
+            "compose",
+            "commandBox"
+          ],
+          "description": "Get KPI performance metrics",
+          "title": "KPI Analytics",
+          "type": "query",
+          "parameters": [
+            {
+              "name": "kpi_name",
+              "title": "KPI Name",
+              "description": "Enter KPI name (e.g., Home Loan Attrition Rate)",
+              "inputType": "text"
+            },
+            {
+              "name": "period",
+              "title": "Time Period",
+              "description": "Enter time period (e.g., past 4 months)",
+              "inputType": "text"
+            }
+          ]
+        },
+        {
+          "id": "simulation",
+          "context": [
+            "compose",
+            "commandBox"
+          ],
+          "description": "Run workforce capacity simulation",
+          "title": "Workforce Simulation",
+          "type": "query",
+          "parameters": [
+            {
+              "name": "ftes",
+              "title": "FTE Count",
+              "description": "Number of FTEs (e.g., 100)",
+              "inputType": "number"
+            },
+            {
+              "name": "handling_time",
+              "title": "Handling Time",
+              "description": "Average handling time in minutes",
+              "inputType": "number"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "your-bot-domain.azurewebsites.net",
+    "localhost"
+  ],
+  "webApplicationInfo": {
+    "id": "YOUR_BOT_APP_ID_HERE",
+    "resource": "https://RscBasedStoreApp"
+  },
+  "authorization": {
+    "permissions": {
+      "resourceSpecific": [
+        {
+          "name": "ChannelMessage.Read.Group",
+          "type": "Application"
+        },
+        {
+          "name": "Team.ReadBasic.Group",
+          "type": "Application"
+        }
+      ]
+    }
+  }
+} 

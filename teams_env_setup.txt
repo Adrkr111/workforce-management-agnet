@@ -1,0 +1,9 @@
+# Copy these lines to your .env file:
+
+TEAMS_APP_ID=21c8dd86-fc50-46c8-a368-5cd2a9519cf9
+TEAMS_APP_PASSWORD=LTj8Q~2oPpJUF4R8gKFLw7Ojjzwax_vRDxkzEah9
+
+# Then restart Chainlit for the changes to take effect 
+
+# The App ID should match what Teams is configured to use
+# This fixes the "Invalid AppId passed on token" error 
