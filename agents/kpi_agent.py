@@ -27,12 +27,126 @@ chroma_client = get_chroma_client()
 def get_date_filter(query: str) -> dict:
     """
     Extract date or date range from query and return ChromaDB filter
+    Enhanced with BANKING TERMINOLOGY support for Q1, Q2, Q3, Q4, etc.
     """
     current_date = datetime.now()
     print(f"Debug - Processing date filter from query: {query}")
     print(f"Debug - Current date: {current_date}")
     
     query_lower = query.lower()
+    
+    # Handle full year requests
+    year_match = re.search(r'year (\d{4})|(\d{4})', query_lower)
+    if year_match:
+        year = year_match.group(1) or year_match.group(2)
+        year = int(year)
+        dates = []
+        for month in range(1, 13):  # 1 to 12
+            date_str = f"{year}-{month:02d}-01"
+            dates.append(date_str)
+        print(f"🏦 FULL YEAR {year}: {dates}")
+        return {"created_date": {"$in": dates}}
+    
+    # 🏦 BANKING QUARTERS - PRIORITY HANDLING (Q1, Q2, Q3, Q4)
+    quarter_pattern = r"q([1-4])\s*(\d{4})"
+    quarter_match = re.search(quarter_pattern, query_lower)
+    if quarter_match:
+        try:
+            quarter_num = int(quarter_match.group(1))
+            year = int(quarter_match.group(2))
+            
+            # Define quarter date ranges (calendar year)
+            quarter_months = {
+                1: [1, 2, 3],     # Q1 = Jan, Feb, Mar
+                2: [4, 5, 6],     # Q2 = Apr, May, Jun  
+                3: [7, 8, 9],     # Q3 = Jul, Aug, Sep
+                4: [10, 11, 12]   # Q4 = Oct, Nov, Dec
+            }
+            
+            months = quarter_months[quarter_num]
+            dates = []
+            
+            for month in months:
+                date_str = f"{year}-{month:02d}-01"
+                dates.append(date_str)
+            
+            print(f"🏦 BANKING QUARTER - Q{quarter_num} {year}: {dates}")
+            return {"created_date": {"$in": dates}}
+            
+        except Exception as e:
+            print(f"Debug - Error parsing quarter: {str(e)}")
+    
+    # 🏦 HALF-YEAR PERIODS (H1, H2)
+    half_pattern = r"h([12])\s*(\d{4})"
+    half_match = re.search(half_pattern, query_lower)
+    if half_match:
+        try:
+            half_num = int(half_match.group(1))
+            year = int(half_match.group(2))
+            
+            if half_num == 1:  # H1 = Q1 + Q2 (Jan-Jun)
+                months = [1, 2, 3, 4, 5, 6]
+            else:  # H2 = Q3 + Q4 (Jul-Dec)
+                months = [7, 8, 9, 10, 11, 12]
+            
+            dates = []
+            for month in months:
+                date_str = f"{year}-{month:02d}-01"
+                dates.append(date_str)
+            
+            print(f"🏦 BANKING HALF - H{half_num} {year}: {dates}")
+            return {"created_date": {"$in": dates}}
+            
+        except Exception as e:
+            print(f"Debug - Error parsing half year: {str(e)}")
+    
+    # 🏦 RELATIVE QUARTERS (last quarter, current quarter, previous quarter)
+    if "quarter" in query_lower:
+        try:
+            current_month = current_date.month
+            current_year = current_date.year
+            
+            # Determine current quarter
+            if current_month <= 3:
+                current_quarter = 1
+            elif current_month <= 6:
+                current_quarter = 2
+            elif current_month <= 9:
+                current_quarter = 3
+            else:
+                current_quarter = 4
+            
+            target_quarter = None
+            target_year = current_year
+            
+            if any(phrase in query_lower for phrase in ["current quarter", "this quarter"]):
+                target_quarter = current_quarter
+            elif any(phrase in query_lower for phrase in ["last quarter", "previous quarter"]):
+                target_quarter = current_quarter - 1
+                if target_quarter < 1:
+                    target_quarter = 4
+                    target_year = current_year - 1
+            
+            if target_quarter:
+                quarter_months = {
+                    1: [1, 2, 3],     # Q1 = Jan, Feb, Mar
+                    2: [4, 5, 6],     # Q2 = Apr, May, Jun  
+                    3: [7, 8, 9],     # Q3 = Jul, Aug, Sep
+                    4: [10, 11, 12]   # Q4 = Oct, Nov, Dec
+                }
+                
+                months = quarter_months[target_quarter]
+                dates = []
+                
+                for month in months:
+                    date_str = f"{target_year}-{month:02d}-01"
+                    dates.append(date_str)
+                
+                print(f"🏦 RELATIVE QUARTER - Q{target_quarter} {target_year}: {dates}")
+                return {"created_date": {"$in": dates}}
+                
+        except Exception as e:
+            print(f"Debug - Error parsing relative quarter: {str(e)}")
     
     # Handle "as of today", "today", "current", "now", "this month"
     if any(phrase in query_lower for phrase in ["as of today", "today", "current", "now", "this month", "current month"]):

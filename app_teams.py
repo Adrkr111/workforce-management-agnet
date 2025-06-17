@@ -1955,6 +1955,15 @@ Just tell me what you'd like to do! For example, you could ask:
 - NEVER generate dummy data - use only real search results
 - Provide business context for KPI interpretation
 - Explain significance of metrics for business performance
+
+🏦 **BANKING TERMINOLOGY EXPERT**:
+- **Q1 2025** = January, February, March 2025 (3 months)
+- **Q2 2025** = April, May, June 2025 (3 months)
+- **Q3 2025** = July, August, September 2025 (3 months)
+- **Q4 2025** = October, November, December 2025 (3 months)
+- **H1/H2** = Half years, **YTD** = Year-to-date
+- Calculate quarterly averages automatically when requested
+- Support all banking time period conventions without clarification
             """,
             
             "Forecasting-Data-Analyst-Agent": """

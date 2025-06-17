@@ -3,6 +3,95 @@
 Test the visualization parsing fix
 """
 
+import json
+from agents.data_visualization_agent import create_visualization, sort_metrics_chronologically
+
+# Test data - same as what the user is asking about
+test_data = """
+Home Loan Attrition Rate (FY 2025):
+- January: 9.92%
+- February: 6.81%
+- March: 13.35%
+- May: 13.66%
+- June: 12.15%
+
+Early Repayment Rate (FY 2025):
+- January: 60.82%
+- March: 68.65%
+- April: 64.22%
+- May: 61.16%
+- June: 73.6%
+"""
+
+print("🧪 Testing Visualization Agent with Month Sorting...")
+print("=" * 60)
+
+# Test the sorting function directly
+test_analysis = {
+    "success": True,
+    "metrics": [
+        {
+            "name": "Home Loan Attrition Rate",
+            "data_points": [
+                {"label": "Jun 2025", "value": 12.15},
+                {"label": "Jan 2025", "value": 9.92},
+                {"label": "May 2025", "value": 13.66},
+                {"label": "Mar 2025", "value": 13.35},
+                {"label": "Feb 2025", "value": 6.81}
+            ]
+        },
+        {
+            "name": "Early Repayment Rate", 
+            "data_points": [
+                {"label": "Jun 2025", "value": 73.6},
+                {"label": "Apr 2025", "value": 64.22},
+                {"label": "Jan 2025", "value": 60.82},
+                {"label": "May 2025", "value": 61.16},
+                {"label": "Mar 2025", "value": 68.65}
+            ]
+        }
+    ]
+}
+
+print("📅 BEFORE Sorting:")
+for metric in test_analysis['metrics']:
+    labels = [p['label'] for p in metric['data_points']]
+    print(f"  {metric['name']}: {labels}")
+
+# Apply sorting
+sorted_analysis = sort_metrics_chronologically(test_analysis)
+
+print("\n📅 AFTER Sorting:")
+for metric in sorted_analysis['metrics']:
+    labels = [p['label'] for p in metric['data_points']]
+    print(f"  {metric['name']}: {labels}")
+
+print("\n" + "=" * 60)
+print("🎯 Testing Full Visualization Creation...")
+
+# Test full visualization
+try:
+    result = create_visualization(test_data)
+    print(f"✅ Visualization created successfully!")
+    print(f"📊 Result type: {type(result)}")
+    
+    if isinstance(result, str):
+        try:
+            result_dict = eval(result)
+            if 'spec' in result_dict:
+                chart_spec = result_dict['spec']
+                if 'data' in chart_spec:
+                    for i, trace in enumerate(chart_spec['data']):
+                        x_values = trace.get('x', [])
+                        print(f"🔍 Trace {i+1} X-axis order: {x_values}")
+        except:
+            print("❌ Could not parse result")
+    
+except Exception as e:
+    print(f"❌ Error: {e}")
+    import traceback
+    traceback.print_exc()
+
 def test_content_parsing():
     """Test the improved content parsing logic"""
     import json

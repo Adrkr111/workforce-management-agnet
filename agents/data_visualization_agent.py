@@ -1,260 +1,324 @@
-from autogen import ConversableAgent
-from config import llm_config
-from .promp_engineering.visualization_agent_prompt import visualization_agent_system_message
+"""
+Data Visualization Agent - Enhanced with AI-driven data analysis and chronological sorting
+"""
+
 import json
 import re
-from typing import Dict, List, Union, Any
-from datetime import datetime
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
-import io
-import base64
+from autogen import ConversableAgent
+from config import llm_config
+
+visualization_agent_system_message = """
+You are a specialized Data Visualization Agent with AI-powered analysis capabilities.
+
+Your responsibilities:
+1. Parse and understand data from any format using AI
+2. Create appropriate charts based on data characteristics  
+3. Ensure proper chronological ordering for time-based data
+4. Return valid visualization specifications
+
+Always respond with a dictionary containing a 'spec' key with chart specifications.
+"""
 
 def create_visualization(data_str: str):
-    """
-    🎯 SIMPLE BULLETPROOF VISUALIZATION AGENT
+    """Create visualization with AI analysis and chronological sorting"""
     
-    Rules:
-    1. Find data patterns (dates + numbers)
-    2. If 2+ datasets: create comparison
-    3. If 1 dataset: create single chart  
-    4. NEVER FAIL - always return something useful
-    """
-    
-    print("🎯 SIMPLE VIZ AGENT - NO NONSENSE APPROACH")
-    text = str(data_str)
+    print(f"🎯 Creating visualization for data...")
     
     try:
-        # 📊 STEP 1: Find all date-number pairs
-        import re
-        from datetime import datetime
+        # AI-powered data analysis
+        analysis = analyze_data_with_ai(data_str)
         
-        # Simple patterns - find any date followed by a number
-        date_number_pairs = []
-        
-        # Pattern 1: 2025-06-01: 2845
-        matches1 = re.findall(r'(\d{4}-\d{2}-\d{2})[^0-9]*(\d+)', text)
-        for date, num in matches1:
-            date_number_pairs.append((date, int(num), 'iso'))
-            
-        # Pattern 2: June 2025: 3141  
-        matches2 = re.findall(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})[^0-9]*(\d+)', text, re.IGNORECASE)
-        for date, num in matches2:
-            date_number_pairs.append((date, int(num), 'month'))
-            
-        print(f"📊 Found {len(date_number_pairs)} data points")
-        
-        if len(date_number_pairs) < 2:
-            return create_simple_fallback(text)
-            
-        # 📊 STEP 2: Split into datasets by detecting breaks in the data
-        datasets = []
-        current_dataset = []
-        current_format = None
-        
-        for date, value, format_type in date_number_pairs:
-            if current_format is None:
-                current_format = format_type
-                current_dataset = [(date, value)]
-            elif format_type == current_format:
-                current_dataset.append((date, value))
-            else:
-                # Format changed - new dataset
-                if current_dataset:
-                    datasets.append((current_dataset, current_format))
-                current_dataset = [(date, value)]
-                current_format = format_type
-                
-        # Add final dataset
-        if current_dataset:
-            datasets.append((current_dataset, current_format))
-            
-        print(f"📂 Split into {len(datasets)} datasets")
-        
-        # 📊 STEP 3: Create the chart
-        if len(datasets) >= 2:
-            return create_comparison_chart(datasets, text)
+        if analysis.get('success'):
+            chart_spec = create_chart_from_ai_analysis(analysis, data_str)
+            return str({'spec': chart_spec})
         else:
-            return create_single_chart(datasets[0], text)
+            # Fallback
+            chart_spec = create_fallback_chart_spec(data_str)
+            return str({'spec': chart_spec})
             
     except Exception as e:
-        print(f"❌ Error: {e}")
-        return create_simple_fallback(text)
+        print(f"❌ Visualization error: {e}")
+        return create_emergency_fallback(data_str)
 
-def create_comparison_chart(datasets, text):
+def analyze_data_with_ai(text: str) -> dict:
+    """AI-powered data analysis with explicit datetime sorting"""
+    
+    analysis_prompt = f"""
+    Analyze this data and extract structured information for visualization:
+    
+    {text}
+    
+    Return JSON with this exact format:
+    {{
+        "success": true,
+        "data_type": "dual_metric",
+        "chart_type": "dual_line",
+        "title": "Home Loan Attrition vs Early Repayment Correlation (FY 2025)",
+        "metrics": [
+            {{
+                "name": "Home Loan Attrition Rate",
+                "axis": "y1",
+                "axis_title": "Attrition Rate (%)",
+                "color": "#e74c3c",
+                "data_points": [
+                    {{"label": "Jan 2025", "value": 9.92}},
+                    {{"label": "Feb 2025", "value": 6.81}},
+                    {{"label": "Mar 2025", "value": 13.35}},
+                    {{"label": "May 2025", "value": 13.66}},
+                    {{"label": "Jun 2025", "value": 12.15}}
+                ]
+            }},
+            {{
+                "name": "Early Repayment Rate",
+                "axis": "y2", 
+                "axis_title": "Early Repayment Rate (%)",
+                "color": "#3498db",
+                "data_points": [
+                    {{"label": "Jan 2025", "value": 60.82}},
+                    {{"label": "Mar 2025", "value": 68.65}},
+                    {{"label": "Apr 2025", "value": 64.22}},
+                    {{"label": "May 2025", "value": 61.16}},
+                    {{"label": "Jun 2025", "value": 73.6}}
+                ]
+            }}
+        ]
+    }}
+    
+    CRITICAL: Sort months chronologically (Jan, Feb, Mar, Apr, May, Jun). Return only JSON.
     """
-    📊 CREATE CLEAN 2-SERIES COMPARISON
-    """
-    # Take first 2 datasets only
-    dataset1, format1 = datasets[0] 
-    dataset2, format2 = datasets[1]
     
-    # Convert dates to standard format
-    x1, y1 = standardize_dataset(dataset1, format1)
-    x2, y2 = standardize_dataset(dataset2, format2)
-    
-    # Detect team names
-    team1 = "Team 1"
-    team2 = "Team 2"
-    
-    if "logistics" in text.lower():
-        team1 = "Logistics Team"
-    if "retail" in text.lower():
-        team2 = "Retail Team"
+    try:
+        analysis_agent = ConversableAgent(
+            name="data_analysis_agent",
+            system_message="You are a data analyst. Return only valid JSON.",
+            llm_config=llm_config,
+            human_input_mode="NEVER"
+        )
         
-    traces = [
-        {
-            'x': x1,
-            'y': y1,
-            'type': 'scatter',
-            'mode': 'lines+markers',
-            'name': team1,
-            'line': {'color': '#2E86C1', 'width': 3},
-            'marker': {'color': '#2E86C1', 'size': 8}
-        },
-        {
-            'x': x2,
-            'y': y2,
-            'type': 'scatter',
-            'mode': 'lines+markers', 
-            'name': team2,
-            'line': {'color': '#E74C3C', 'width': 3},
-            'marker': {'color': '#E74C3C', 'size': 8}
-        }
-    ]
-    
-    layout = {
-        'title': f'Forecast Comparison: {team1} vs {team2}',
-        'xaxis': {'title': 'Time Period', 'tickangle': -45},
-        'yaxis': {'title': 'Volume'},
-        'showlegend': True,
-        'plot_bgcolor': 'white'
-    }
-    
-    spec = {'data': traces, 'layout': layout}
-    print(f"✅ Created comparison: {team1} vs {team2}")
-    return str({'spec': spec})
-
-def create_single_chart(dataset_info, text):
-    """
-    📊 CREATE SINGLE SERIES CHART
-    """
-    dataset, format_type = dataset_info
-    x, y = standardize_dataset(dataset, format_type)
-    
-    team_name = "Business Forecast"
-    if "logistics" in text.lower():
-        team_name = "Logistics Forecast"
-    elif "retail" in text.lower():
-        team_name = "Retail Forecast"
+        response = analysis_agent.generate_reply(
+            messages=[{"role": "user", "content": analysis_prompt}]
+        )
         
-    trace = {
-        'x': x,
-        'y': y,
-        'type': 'scatter',
-        'mode': 'lines+markers',
-        'name': team_name,
-        'line': {'color': '#2E86C1', 'width': 3},
-        'marker': {'color': '#2E86C1', 'size': 8}
-    }
-    
-    layout = {
-        'title': team_name,
-        'xaxis': {'title': 'Time Period', 'tickangle': -45},
-        'yaxis': {'title': 'Volume'},
-        'showlegend': False,
-        'plot_bgcolor': 'white'
-    }
-    
-    spec = {'data': [trace], 'layout': layout}
-    print(f"✅ Created single chart: {team_name}")
-    return str({'spec': spec})
-
-def standardize_dataset(dataset, format_type):
-    """
-    🧹 CLEAN AND STANDARDIZE DATES
-    """
-    from datetime import datetime
-    
-    x_vals = []
-    y_vals = []
-    
-    for date_str, value in dataset:
-        try:
-            if format_type == 'iso':
-                # 2025-06-01 -> Jun 2025
-                dt = datetime.strptime(date_str, '%Y-%m-%d')
-                clean_date = dt.strftime('%b %Y')
-            else:
-                # June 2025 -> Jun 2025  
-                try:
-                    dt = datetime.strptime(date_str, '%B %Y')
-                    clean_date = dt.strftime('%b %Y')
-                except:
-                    # Already in short format
-                    clean_date = date_str
-                    
-            x_vals.append(clean_date)
-            y_vals.append(value)
-        except:
-            # Skip bad data
-            continue
+        if isinstance(response, dict) and 'content' in response:
+            response_text = response['content']
+        else:
+            response_text = str(response)
+        
+        # Extract JSON
+        json_start = response_text.find('{')
+        json_end = response_text.rfind('}') + 1
+        
+        if json_start != -1 and json_end > json_start:
+            json_text = response_text[json_start:json_end]
+            analysis_result = json.loads(json_text)
             
-    return x_vals, y_vals
+            if analysis_result.get('success') and 'metrics' in analysis_result:
+                # Apply explicit chronological sorting
+                analysis_result = sort_metrics_chronologically(analysis_result)
+                print(f"✅ Analysis success: {len(analysis_result.get('metrics', []))} metrics")
+                return analysis_result
+            else:
+                return {"success": False}
+        else:
+            return {"success": False}
+            
+    except Exception as e:
+        print(f"❌ Analysis error: {e}")
+        return {"success": False}
 
-def create_simple_fallback(text):
-    """
-    🚨 SIMPLE FALLBACK - EXTRACT ANY NUMBERS
-    """
-    import re
-    numbers = re.findall(r'\d+', text)
+def sort_metrics_chronologically(analysis: dict) -> dict:
+    """Sort all metrics data points in chronological order"""
     
-    if len(numbers) >= 2:
-        values = [int(n) for n in numbers[:8]]  # Max 8 points
-        labels = [f'Data {i+1}' for i in range(len(values))]
+    # Month order mapping
+    month_order = {
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'may': 5,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12
+    }
+    
+    def get_month_order(label: str) -> int:
+        """Extract month order from label"""
+        label_lower = label.lower()
+        for month, order in month_order.items():
+            if month in label_lower:
+                return order
+        return 999  # Unknown months go to end
+    
+    # Sort each metric's data points
+    for metric in analysis.get('metrics', []):
+        data_points = metric.get('data_points', [])
+        if data_points:
+            # Sort by month order
+            sorted_points = sorted(data_points, key=lambda x: get_month_order(x.get('label', '')))
+            metric['data_points'] = sorted_points
+            
+            print(f"📅 Sorted {metric.get('name', 'Unknown')}: {[p.get('label') for p in sorted_points]}")
+    
+    return analysis
+
+def sort_months_chronologically(months: list) -> list:
+    """Sort month labels in chronological order"""
+    
+    month_order = {
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'may': 5,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12
+    }
+    
+    def get_month_order(month_label: str) -> int:
+        """Extract month order from label"""
+        label_lower = month_label.lower()
+        for month, order in month_order.items():
+            if month in label_lower:
+                return order
+        return 999  # Unknown months go to end
+    
+    # Sort months by chronological order
+    sorted_months = sorted(months, key=get_month_order)
+    print(f"🗓️ Month sort: {months} → {sorted_months}")
+    return sorted_months
+
+def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
+    """Create chart from AI analysis with FORCED chronological X-axis ordering"""
+    
+    metrics = analysis.get('metrics', [])
+    title = analysis.get('title', 'Data Visualization')
+    
+    if not metrics:
+        return create_fallback_chart_spec(original_text)
+    
+    print(f"📊 Creating chart: {title}")
+    
+    # Collect ALL unique month labels from all metrics
+    all_months = set()
+    for metric in metrics:
+        for point in metric.get('data_points', []):
+            month_label = point.get('label', '').strip()
+            if month_label:
+                all_months.add(month_label)
+    
+    # Sort months chronologically using our robust function
+    sorted_months = sort_months_chronologically(list(all_months))
+    print(f"📅 FINAL chronological order: {sorted_months}")
+    
+    traces = []
+    layout = {
+        'title': title,
+        'xaxis': {
+            'title': 'Month',
+            'type': 'category',
+            'categoryorder': 'array',
+            'categoryarray': sorted_months  # FORCE this exact order
+        },
+        'showlegend': True,
+        'plot_bgcolor': 'white',
+        'paper_bgcolor': 'white',
+        'hovermode': 'x unified'
+    }
+    
+    for i, metric in enumerate(metrics):
+        data_points = metric.get('data_points', [])
+        metric_name = metric.get('name', f'Metric {i+1}')
+        color = metric.get('color', '#3498db')
+        axis = metric.get('axis', 'y1')
+        axis_title = metric.get('axis_title', 'Values')
+        
+        if not data_points:
+            continue
+        
+        # Create mapping of month to value
+        month_to_value = {}
+        for point in data_points:
+            label = point.get('label', '').strip()
+            value = point.get('value')
+            if label:
+                month_to_value[label] = value
+        
+        # Build trace data in exact chronological order
+        x_values = []
+        y_values = []
+        
+        for month in sorted_months:
+            if month in month_to_value:
+                x_values.append(month)
+                try:
+                    value = float(month_to_value[month]) if month_to_value[month] is not None else None
+                    y_values.append(value)
+                except (ValueError, TypeError):
+                    y_values.append(None)
         
         trace = {
-            'x': labels,
-            'y': values,
-            'type': 'bar',
-            'marker': {'color': '#3498db'}
+            'x': x_values,
+            'y': y_values,
+            'type': 'scatter',
+            'mode': 'lines+markers',
+            'name': metric_name,
+            'line': {'color': color, 'width': 3},
+            'marker': {'color': color, 'size': 8},
+            'connectgaps': False
         }
         
-        layout = {
+        # Assign to secondary y-axis if specified
+        if axis == 'y2':
+            trace['yaxis'] = 'y2'
+        
+        traces.append(trace)
+        print(f"🔍 {metric_name} final X-axis: {x_values}")
+        
+        # Configure axes
+        if axis == 'y1':
+            layout['yaxis'] = {'title': axis_title, 'side': 'left'}
+        elif axis == 'y2':
+            layout['yaxis2'] = {'title': axis_title, 'side': 'right', 'overlaying': 'y'}
+    
+    final_chart = {'data': traces, 'layout': layout}
+    print(f"🎯 Chart created with {len(traces)} traces")
+    return final_chart
+
+def create_fallback_chart_spec(text: str) -> dict:
+    """Emergency fallback chart"""
+    
+    print("🚨 Using fallback chart")
+    
+    return {
+        'data': [],
+        'layout': {
             'title': 'Data Visualization',
-            'xaxis': {'title': 'Data Points'},
-            'yaxis': {'title': 'Values'},
+            'xaxis': {'title': 'Time'},
+            'yaxis': {'title': 'Value'},
             'plot_bgcolor': 'white'
         }
-        
-        spec = {'data': [trace], 'layout': layout}
-        print("✅ Created fallback bar chart")
-        return str({'spec': spec})
-    else:
-        # Ultimate fallback
-        spec = {
-            'data': [{'x': ['Input'], 'y': [len(text)], 'type': 'bar', 'marker': {'color': '#95a5a6'}}],
-            'layout': {'title': 'Input Analysis', 'plot_bgcolor': 'white'}
-        }
-        print("✅ Created text analysis fallback")
-        return str({'spec': spec})
+    }
+
+def create_emergency_fallback(text: str) -> str:
+    """Emergency fallback"""
+    chart_spec = create_fallback_chart_spec(text)
+    return str({'spec': chart_spec})
 
 def create_agent():
-    """
-    Create the universal data visualization agent
-    """
-    agent = ConversableAgent(
+    """Create the visualization agent"""
+    return ConversableAgent(
         name="Data-Visualization-Agent",
         system_message=visualization_agent_system_message,
         llm_config=llm_config,
         human_input_mode="NEVER",
+        function_map={"create_visualization": create_visualization}
     )
-    
-    # Register the universal visualization function
-    agent.register_for_execution()(create_visualization)
-    agent.register_for_llm(description="Create visualization from ANY data format")(create_visualization)
-    
-    return agent 
