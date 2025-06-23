@@ -6,6 +6,7 @@ import json
 import re
 from autogen import ConversableAgent
 from config import llm_config
+from datetime import datetime
 
 visualization_agent_system_message = """
 You are a specialized Data Visualization Agent with AI-powered analysis capabilities.
@@ -22,21 +23,34 @@ Always respond with a dictionary containing a 'spec' key with chart specificatio
 
 def create_visualization(data_str: str):
     """Create visualization with AI analysis and proper chronological sorting"""
-    
-    print(f"🎯 Creating AI-powered visualization for: {data_str[:100]}...")
-    
+
+    print(f"🎯 Creating AI-powered visualization for: {str(data_str)[:100]}...")
+
     try:
+        # Pre-check for comparison mode to avoid unnecessary AI call
+        parsed = None
+        if isinstance(data_str, str):
+            try:
+                parsed = json.loads(data_str)
+            except Exception:
+                parsed = None
+        elif isinstance(data_str, dict):
+            parsed = data_str
+
+        if isinstance(parsed, dict) and parsed.get("comparison_mode"):
+            chart_spec = create_comparison_chart(parsed)
+            return str({"spec": chart_spec})
+
         # AI-powered data analysis
         analysis = analyze_data_with_ai(data_str)
-        
+
         if analysis.get('success'):
             chart_spec = create_chart_from_ai_analysis(analysis, data_str)
             return str({'spec': chart_spec})
         else:
-            # Fallback
             chart_spec = create_fallback_chart_spec(data_str)
             return str({'spec': chart_spec})
-            
+
     except Exception as e:
         print(f"❌ Visualization error: {e}")
         return create_emergency_fallback(data_str)
@@ -209,6 +223,8 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
     chart_type = analysis.get('chart_type', 'line')
     
     if not metrics:
+        if analysis.get('comparison_mode') and analysis.get('datasets'):
+            return create_comparison_chart(analysis)
         return create_fallback_chart_spec(original_text)
     
     print(f"📊 Creating {chart_type} chart: {title}")
@@ -224,10 +240,11 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
             'title': 'Time',
             'type': 'category',
             'categoryorder': 'array',
-            'categoryarray': complete_timeline,  # FORCE complete chronological order
+            'categoryarray': complete_timeline,
             'tickangle': -45
         },
-        'showlegend': len(metrics) > 1,
+        'showlegend': True,
+        'legend': {'orientation': 'h'},
         'plot_bgcolor': 'white',
         'paper_bgcolor': 'white',
         'hovermode': 'x unified'
@@ -277,12 +294,15 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
             'name': metric_name,
             'line': {'color': color, 'width': 3},
             'marker': {'color': color, 'size': 8},
-            'connectgaps': False  # Show gaps for missing data
+            'connectgaps': False
         }
         
         if chart_type == 'bar':
             trace['type'] = 'bar'
             trace.pop('mode', None)
+            trace.pop('line', None)
+        elif chart_type == 'scatter':
+            trace['mode'] = 'markers'
             trace.pop('line', None)
         
         if axis == 'y2':
@@ -425,14 +445,96 @@ def create_yyyy_mm_timeline(labels: set) -> list:
     
     while (current_year, current_month) <= (max_year, max_month):
         timeline.append(f"{current_year}-{current_month:02d}")
-        
+
         if current_month == 12:
             current_month = 1
             current_year += 1
         else:
             current_month += 1
-    
+
     return timeline
+
+def _parse_date(label: str):
+    """Parse common date formats to datetime object"""
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%b %Y", "%B %Y"):
+        try:
+            return datetime.strptime(label, fmt)
+        except Exception:
+            continue
+    return None
+
+def create_comparison_chart(data: dict) -> dict:
+    """Create comparison chart from pre-parsed datasets"""
+
+    datasets = data.get("datasets", [])
+    if not datasets:
+        return create_fallback_chart_spec(str(data))
+
+    # Collect timeline
+    labels = set()
+    for ds in datasets:
+        for p in ds.get("points", []):
+            label = p.get("date") or p.get("label")
+            if label:
+                labels.add(label)
+
+    parsed = [(lbl, _parse_date(lbl)) for lbl in labels]
+    parsed.sort(key=lambda x: x[1] or x[0])
+    timeline = [lbl for lbl, _ in parsed]
+
+    layout = {
+        'title': data.get('title', 'Comparison'),
+        'xaxis': {
+            'title': 'Time',
+            'type': 'category',
+            'categoryorder': 'array',
+            'categoryarray': timeline,
+            'tickangle': -45
+        },
+        'showlegend': True,
+        'legend': {'orientation': 'h'},
+        'hovermode': 'x unified'
+    }
+
+    traces = []
+    colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c']
+
+    mappings = []
+    for idx, ds in enumerate(datasets):
+        mapping = {(p.get('date') or p.get('label')): p.get('value') for p in ds.get('points', [])}
+        mappings.append(mapping)
+        y = [mapping.get(t) for t in timeline]
+        trace = {
+            'x': timeline,
+            'y': y,
+            'type': 'scatter',
+            'mode': 'lines+markers',
+            'name': ds.get('label', f'Dataset {idx+1}'),
+            'line': {'color': colors[idx % len(colors)], 'width': 3},
+            'marker': {'color': colors[idx % len(colors)], 'size': 8},
+        }
+        traces.append(trace)
+
+    if len(datasets) == 2:
+        delta = []
+        map1 = mappings[0]
+        map2 = mappings[1]
+        for t in timeline:
+            v1 = map1.get(t)
+            v2 = map2.get(t)
+            delta.append((v1 if isinstance(v1, (int, float)) else 0) - (v2 if isinstance(v2, (int, float)) else 0))
+        traces.append({
+            'x': timeline,
+            'y': delta,
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': 'Delta',
+            'yaxis': 'y2',
+            'line': {'color': '#000000', 'dash': 'dot'}
+        })
+        layout['yaxis2'] = {'title': 'Delta', 'overlaying': 'y', 'side': 'right'}
+
+    return {'data': traces, 'layout': layout}
 
 def create_fallback_chart_spec(text: str) -> dict:
     """Emergency fallback chart"""
