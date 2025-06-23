@@ -833,7 +833,7 @@ class GroupChat:
                                                 )
                                                 
                                                 await cl.Message(
-                                                    content="📊 **Forecast Chart**",
+                                                    content="📊 **Chart**",
                                                     elements=[chart_image],
                                                     author=get_chainlit_author_from_role(author)
                                                 ).send()
