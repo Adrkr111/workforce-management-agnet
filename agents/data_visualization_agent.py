@@ -4,8 +4,24 @@ Data Visualization Agent - Enhanced with AI-driven data analysis and chronologic
 
 import json
 import re
+from typing import Optional
+
+import pandas as pd
 from autogen import ConversableAgent
 from config import llm_config
+
+
+def _parse_date(label: str) -> Optional[pd.Timestamp]:
+    if not isinstance(label, str) or not label.strip():
+        return None
+    for fmt in [None, "%Y-%m", "%B %Y", "%b %Y", "%Y"]:
+        try:
+            dt = pd.to_datetime(label, format=fmt, errors="coerce") if fmt else pd.to_datetime(label, errors="coerce")
+            if not pd.isna(dt):
+                return dt
+        except Exception:
+            continue
+    return None
 
 visualization_agent_system_message = """
 You are a specialized Data Visualization Agent with AI-powered analysis capabilities.
@@ -127,74 +143,41 @@ def analyze_data_with_ai(text: str) -> dict:
         return {"success": False}
 
 def sort_metrics_chronologically(analysis: dict) -> dict:
-    """Sort all metrics data points in chronological order"""
-    
-    # Month order mapping
-    month_order = {
-        'jan': 1, 'january': 1,
-        'feb': 2, 'february': 2,
-        'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4,
-        'may': 5,
-        'jun': 6, 'june': 6,
-        'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'dec': 12, 'december': 12
-    }
-    
-    def get_month_order(label: str) -> int:
-        """Extract month order from label"""
-        label_lower = label.lower()
-        for month, order in month_order.items():
-            if month in label_lower:
-                return order
-        return 999  # Unknown months go to end
-    
-    # Sort each metric's data points
+    """Sort all metrics data points in chronological order using pandas."""
+
     for metric in analysis.get('metrics', []):
         data_points = metric.get('data_points', [])
-        if data_points:
-            # Sort by month order
-            sorted_points = sorted(data_points, key=lambda x: get_month_order(x.get('label', '')))
-            metric['data_points'] = sorted_points
-            
-            print(f"📅 Sorted {metric.get('name', 'Unknown')}: {[p.get('label') for p in sorted_points]}")
+        if not data_points:
+            continue
+
+        parsed = []
+        for pt in data_points:
+            dt = _parse_date(pt.get('label', ''))
+            parsed.append((dt if dt is not None else pd.Timestamp.max, pt))
+
+        parsed.sort(key=lambda x: x[0])
+        metric['data_points'] = [p for _, p in parsed]
+
+        print(f"📅 Sorted {metric.get('name', 'Unknown')}: {[p.get('label') for p in metric['data_points']]}")
     
     return analysis
 
 def sort_months_chronologically(months: list) -> list:
-    """Sort month labels in chronological order"""
-    
-    month_order = {
-        'jan': 1, 'january': 1,
-        'feb': 2, 'february': 2,
-        'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4,
-        'may': 5,
-        'jun': 6, 'june': 6,
-        'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'dec': 12, 'december': 12
-    }
-    
-    def get_month_order(month_label: str) -> int:
-        """Extract month order from label"""
-        label_lower = month_label.lower()
-        for month, order in month_order.items():
-            if month in label_lower:
-                return order
-        return 999  # Unknown months go to end
-    
-    # Sort months by chronological order
-    sorted_months = sorted(months, key=get_month_order)
-    print(f"🗓️ Month sort: {months} → {sorted_months}")
-    return sorted_months
+    """Sort month labels in chronological order using pandas."""
+
+    parsed = []
+    remainder = []
+    for m in months:
+        dt = _parse_date(m)
+        if dt is not None:
+            parsed.append((dt, m))
+        else:
+            remainder.append(m)
+
+    parsed.sort(key=lambda x: x[0])
+    ordered = [m for _, m in parsed] + sorted(remainder)
+    print(f"🗓️ Month sort: {months} → {ordered}")
+    return ordered
 
 def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
     """Create chart from AI analysis with FORCED chronological X-axis ordering"""
@@ -219,20 +202,24 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
     sorted_months = sort_months_chronologically(list(all_months))
     print(f"📅 FINAL chronological order: {sorted_months}")
     
+    chart_type = analysis.get('chart_type', 'line').lower()
+
     traces = []
     layout = {
         'title': title,
-        'xaxis': {
-            'title': 'Month',
-            'type': 'category',
-            'categoryorder': 'array',
-            'categoryarray': sorted_months  # FORCE this exact order
-        },
         'showlegend': True,
         'plot_bgcolor': 'white',
         'paper_bgcolor': 'white',
         'hovermode': 'x unified'
     }
+
+    if chart_type != 'pie':
+        layout['xaxis'] = {
+            'title': 'Month',
+            'type': 'category',
+            'categoryorder': 'array',
+            'categoryarray': sorted_months
+        }
     
     for i, metric in enumerate(metrics):
         data_points = metric.get('data_points', [])
@@ -257,31 +244,49 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
         y_values = []
         
         for month in sorted_months:
-            if month in month_to_value:
-                x_values.append(month)
-                try:
-                    value = float(month_to_value[month]) if month_to_value[month] is not None else None
-                    y_values.append(value)
-                except (ValueError, TypeError):
-                    y_values.append(None)
+            x_values.append(month)
+            val = month_to_value.get(month)
+            try:
+                y_values.append(float(val) if val is not None else None)
+            except (ValueError, TypeError):
+                y_values.append(None)
         
-        trace = {
-            'x': x_values,
-            'y': y_values,
-            'type': 'scatter',
-            'mode': 'lines+markers',
-            'name': metric_name,
-            'line': {'color': color, 'width': 3},
-            'marker': {'color': color, 'size': 8},
-            'connectgaps': False
-        }
+        if chart_type == 'pie':
+            labels = [p.get('label') for p in data_points]
+            values = [p.get('value') for p in data_points]
+            trace = {
+                'type': 'pie',
+                'labels': labels,
+                'values': values,
+                'name': metric_name,
+                'textinfo': 'percent+label'
+            }
+        else:
+            trace = {
+                'x': x_values,
+                'y': y_values,
+                'type': 'scatter',
+                'mode': 'lines+markers',
+                'name': metric_name,
+                'line': {'color': color, 'width': 3},
+                'marker': {'color': color, 'size': 8},
+                'connectgaps': False
+            }
         
         # Assign to secondary y-axis if specified
         if axis == 'y2':
             trace['yaxis'] = 'y2'
         
+        if chart_type == 'bar':
+            trace['type'] = 'bar'
+            trace.pop('mode', None)
+            trace.pop('line', None)
+        elif chart_type == 'scatter':
+            trace['mode'] = 'markers'
+
         traces.append(trace)
-        print(f"🔍 {metric_name} final X-axis: {x_values}")
+        if chart_type != 'pie':
+            print(f"🔍 {metric_name} final X-axis: {x_values}")
         
         # Configure axes
         if axis == 'y1':
