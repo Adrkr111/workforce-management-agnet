@@ -4,8 +4,30 @@ Data Visualization Agent - PROPER AI VERSION with chronological sorting
 
 import json
 import re
+from typing import Optional
+
+import pandas as pd
 from autogen import ConversableAgent
 from config import llm_config
+import plotly.graph_objects as go
+import plotly.io as pio
+
+
+def _parse_date(label: str) -> Optional[pd.Timestamp]:
+    """Parse a date string into a Timestamp if possible."""
+    if not isinstance(label, str) or not label.strip():
+        return None
+    for fmt in [None, "%Y-%m", "%B %Y", "%b %Y", "%Y"]:
+        try:
+            if fmt:
+                dt = pd.to_datetime(label, format=fmt, errors="coerce")
+            else:
+                dt = pd.to_datetime(label, errors="coerce")
+            if not pd.isna(dt):
+                return dt
+        except Exception:
+            continue
+    return None
 
 visualization_agent_system_message = """
 You are a specialized Data Visualization Agent with AI-powered analysis capabilities.
@@ -61,7 +83,7 @@ def analyze_data_with_ai(text: str) -> dict:
     {{
         "success": true,
         "data_type": "forecast|comparison|trend|other",
-        "chart_type": "line|bar|dual_line|scatter",
+        "chart_type": "line|bar|dual_line|scatter|pie",
         "title": "Descriptive Title",
         "metrics": [
             {{
@@ -122,83 +144,25 @@ def analyze_data_with_ai(text: str) -> dict:
         return {"success": False}
 
 def sort_time_data_chronologically(analysis: dict) -> dict:
-    """Sort time-based data points in chronological order"""
-    
-    def is_time_based(label: str) -> bool:
-        """Check if label contains time information"""
-        time_patterns = [
-            r'\d{4}-\d{2}',  # YYYY-MM
-            r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',  # Month names
-            r'(january|february|march|april|may|june|july|august|september|october|november|december)',
-            r'Q[1-4]',  # Quarters
-            r'\d{4}'    # Years
-        ]
-        
-        label_lower = label.lower()
-        for pattern in time_patterns:
-            if re.search(pattern, label_lower):
-                return True
-        return False
-    
-    def get_time_sort_key(label: str) -> tuple:
-        """Generate sort key for time-based labels"""
-        label_lower = label.lower()
-        
-        # Handle YYYY-MM format
-        yyyy_mm_match = re.search(r'(\d{4})-(\d{2})', label)
-        if yyyy_mm_match:
-            year, month = int(yyyy_mm_match.group(1)), int(yyyy_mm_match.group(2))
-            return (year, month, 0)
-        
-        # Handle month names
-        months = {
-            'jan': 1, 'january': 1, 'feb': 2, 'february': 2,
-            'mar': 3, 'march': 3, 'apr': 4, 'april': 4,
-            'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
-            'aug': 8, 'august': 8, 'sep': 9, 'september': 9,
-            'oct': 10, 'october': 10, 'nov': 11, 'november': 11,
-            'dec': 12, 'december': 12
-        }
-        
-        for month_name, month_num in months.items():
-            if month_name in label_lower:
-                # Try to extract year
-                year_match = re.search(r'(\d{4})', label)
-                year = int(year_match.group(1)) if year_match else 2025
-                return (year, month_num, 0)
-        
-        # Handle quarters
-        quarter_match = re.search(r'q([1-4])', label_lower)
-        if quarter_match:
-            quarter = int(quarter_match.group(1))
-            year_match = re.search(r'(\d{4})', label)
-            year = int(year_match.group(1)) if year_match else 2025
-            return (year, quarter * 3, 0)  # Convert quarter to month
-        
-        # Handle year only
-        year_match = re.search(r'(\d{4})', label)
-        if year_match:
-            year = int(year_match.group(1))
-            return (year, 1, 0)
-        
-        return (9999, 99, 99)  # Put non-time data at end
-    
-    # Sort each metric's data points if they contain time data
+    """Sort time-based data points using pandas date parsing."""
+
     for metric in analysis.get('metrics', []):
-        data_points = metric.get('data_points', [])
+        data_points = metric.get("data_points", [])
         if not data_points:
             continue
-        
-        # Check if this metric has time-based data
-        first_label = data_points[0].get('label', '')
-        if is_time_based(first_label):
-            # Sort by time
-            sorted_points = sorted(data_points, key=lambda x: get_time_sort_key(x.get('label', '')))
-            metric['data_points'] = sorted_points
-            
-            labels = [p.get('label') for p in sorted_points]
-            print(f"📅 Sorted time data for {metric.get('name', 'Unknown')}: {labels}")
-    
+
+        parsed = []
+        for point in data_points:
+            label = point.get("label", "")
+            dt = _parse_date(label)
+            parsed.append((dt if dt is not None else pd.Timestamp.max, point))
+
+        parsed.sort(key=lambda x: x[0])
+        metric["data_points"] = [p for _, p in parsed]
+
+        labels = [p.get("label") for p in metric["data_points"]]
+        print(f"📅 Sorted time data for {metric.get('name', 'Unknown')}: {labels}")
+
     return analysis
 
 def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
@@ -220,18 +184,20 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
     traces = []
     layout = {
         'title': title,
-        'xaxis': {
-            'title': 'Time',
-            'type': 'category',
-            'categoryorder': 'array',
-            'categoryarray': complete_timeline,  # FORCE complete chronological order
-            'tickangle': -45
-        },
-        'showlegend': len(metrics) > 1,
+        'showlegend': True,
         'plot_bgcolor': 'white',
         'paper_bgcolor': 'white',
         'hovermode': 'x unified'
     }
+
+    if chart_type != 'pie':
+        layout['xaxis'] = {
+            'title': 'Time',
+            'type': 'category',
+            'categoryorder': 'array',
+            'categoryarray': complete_timeline,
+            'tickangle': -45
+        }
     
     colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c']
     
@@ -241,58 +207,58 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
         color = metric.get('color', colors[i % len(colors)])
         axis = metric.get('axis', 'y1')
         axis_title = metric.get('axis_title', 'Values')
-        
+
         if not data_points:
             continue
-        
-        # Create mapping of label to value
-        label_to_value = {}
-        for point in data_points:
-            label = point.get('label', '').strip()
-            value = point.get('value')
-            if label:
-                label_to_value[label] = value
-        
-        # 🎯 BULLETPROOF FIX: Use COMPLETE timeline as X-axis, with None for missing data
+
+        label_to_value = {p.get('label', '').strip(): p.get('value') for p in data_points if p.get('label')}
+
         x_values = []
         y_values = []
-        
         for time_label in complete_timeline:
-            x_values.append(time_label)  # Always include ALL timeline points
-            if time_label in label_to_value:
-                try:
-                    value = float(label_to_value[time_label]) if label_to_value[time_label] is not None else None
-                    y_values.append(value)
-                except (ValueError, TypeError):
-                    y_values.append(None)
-            else:
-                y_values.append(None)  # Use None for missing data points
-        
-        # Create trace
-        trace = {
-            'x': x_values,
-            'y': y_values,
-            'type': 'scatter',
-            'mode': 'lines+markers',
-            'name': metric_name,
-            'line': {'color': color, 'width': 3},
-            'marker': {'color': color, 'size': 8},
-            'connectgaps': False  # Show gaps for missing data
-        }
-        
-        if chart_type == 'bar':
-            trace['type'] = 'bar'
-            trace.pop('mode', None)
-            trace.pop('line', None)
-        
-        if axis == 'y2':
-            trace['yaxis'] = 'y2'
-        
+            x_values.append(time_label)
+            val = label_to_value.get(time_label)
+            try:
+                y_values.append(float(val) if val is not None else None)
+            except (ValueError, TypeError):
+                y_values.append(None)
+
+        if chart_type == 'pie':
+            labels = [p.get('label') for p in data_points]
+            values = [p.get('value') for p in data_points]
+            trace = {
+                'type': 'pie',
+                'labels': labels,
+                'values': values,
+                'name': metric_name,
+                'textinfo': 'percent+label'
+            }
+        else:
+            trace = {
+                'x': x_values,
+                'y': y_values,
+                'type': 'scatter',
+                'mode': 'lines+markers',
+                'name': metric_name,
+                'line': {'color': color, 'width': 3},
+                'marker': {'color': color, 'size': 8},
+                'connectgaps': False
+            }
+
+            if chart_type == 'bar':
+                trace['type'] = 'bar'
+                trace.pop('mode', None)
+                trace.pop('line', None)
+            elif chart_type == 'scatter':
+                trace['mode'] = 'markers'
+
+            if axis == 'y2':
+                trace['yaxis'] = 'y2'
+
         traces.append(trace)
-        print(f"🔍 {metric_name} BULLETPROOF timeline:")
-        print(f"   📅 X-axis: {x_values}")
-        print(f"   📊 Y-axis: {y_values}")
-        
+        if chart_type != 'pie':
+            print(f"🔍 {metric_name} timeline: X={x_values}, Y={y_values}")
+
         # Configure axes
         if axis == 'y1':
             layout['yaxis'] = {'title': axis_title, 'side': 'left'}
@@ -304,135 +270,28 @@ def create_chart_from_ai_analysis(analysis: dict, original_text: str) -> dict:
     return final_chart
 
 def create_complete_timeline(metrics: list) -> list:
-    """Create a complete chronological timeline from all data points"""
-    
-    # Collect all time labels from all metrics
-    all_labels = set()
+    """Create a complete chronological timeline from all metric labels."""
+
+    labels = set()
     for metric in metrics:
-        for point in metric.get('data_points', []):
-            label = point.get('label', '').strip()
-            if label:
-                all_labels.add(label)
-    
-    if not all_labels:
-        return []
-    
-    # Determine the time format and create complete timeline
-    sample_label = list(all_labels)[0].lower()
-    
-    if re.search(r'\d{4}-\d{2}', sample_label):
-        # YYYY-MM format
-        return create_yyyy_mm_timeline(all_labels)
-    elif any(month in sample_label for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
-        # Month Year format
-        return create_month_year_timeline(all_labels)
-    else:
-        # Fallback to simple sort
-        return sorted(all_labels)
+        for point in metric.get("data_points", []):
+            lbl = point.get("label", "").strip()
+            if lbl:
+                labels.add(lbl)
 
-def create_month_year_timeline(labels: set) -> list:
-    """Create complete timeline for Month Year format (e.g., 'Jan 2025', 'February 2025')"""
-    
-    # Parse all labels to get year-month pairs
-    parsed_dates = []
-    
-    month_mapping = {
-        'jan': 1, 'january': 1,
-        'feb': 2, 'february': 2,
-        'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4,
-        'may': 5,
-        'jun': 6, 'june': 6,
-        'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'dec': 12, 'december': 12
-    }
-    
-    month_names = {
-        1: 'January', 2: 'February', 3: 'March', 4: 'April', 5: 'May', 6: 'June',
-        7: 'July', 8: 'August', 9: 'September', 10: 'October', 11: 'November', 12: 'December'
-    }
-    
-    for label in labels:
-        label_lower = label.lower()
-        
-        # Find month
-        found_month = 0
-        for month_name, month_num in month_mapping.items():
-            if month_name in label_lower:
-                found_month = month_num
-                break
-        
-        # Find year
-        year_match = re.search(r'(\d{4})', label)
-        found_year = int(year_match.group(1)) if year_match else 2025
-        
-        if found_month > 0:
-            parsed_dates.append((found_year, found_month, label))
-    
-    if not parsed_dates:
-        return sorted(labels)
-    
-    # Sort by year, month
-    parsed_dates.sort(key=lambda x: (x[0], x[1]))
-    
-    # Get the range
-    min_year, min_month = parsed_dates[0][0], parsed_dates[0][1]
-    max_year, max_month = parsed_dates[-1][0], parsed_dates[-1][1]
-    
-    # Build complete timeline
-    timeline = []
-    current_year, current_month = min_year, min_month
-    
-    while (current_year, current_month) <= (max_year, max_month):
-        # Use full month name consistently
-        month_label = f"{month_names[current_month]} {current_year}"
-        timeline.append(month_label)
-        
-        # Move to next month
-        if current_month == 12:
-            current_month = 1
-            current_year += 1
+    parsed = []
+    remainder = []
+    for lbl in labels:
+        dt = _parse_date(lbl)
+        if dt is not None:
+            parsed.append((dt, lbl))
         else:
-            current_month += 1
-    
-    print(f"🗓️ Created complete timeline: {timeline}")
-    return timeline
+            remainder.append(lbl)
 
-def create_yyyy_mm_timeline(labels: set) -> list:
-    """Create complete timeline for YYYY-MM format"""
-    
-    parsed_dates = []
-    for label in labels:
-        match = re.search(r'(\d{4})-(\d{2})', label)
-        if match:
-            year, month = int(match.group(1)), int(match.group(2))
-            parsed_dates.append((year, month))
-    
-    if not parsed_dates:
-        return sorted(labels)
-    
-    parsed_dates.sort()
-    min_year, min_month = parsed_dates[0]
-    max_year, max_month = parsed_dates[-1]
-    
-    # Build complete timeline
-    timeline = []
-    current_year, current_month = min_year, min_month
-    
-    while (current_year, current_month) <= (max_year, max_month):
-        timeline.append(f"{current_year}-{current_month:02d}")
-        
-        if current_month == 12:
-            current_month = 1
-            current_year += 1
-        else:
-            current_month += 1
-    
-    return timeline
+    parsed.sort(key=lambda x: x[0])
+    ordered = [l for _, l in parsed] + sorted(remainder)
+    return ordered
+
 
 def create_fallback_chart_spec(text: str) -> dict:
     """Emergency fallback chart"""
@@ -453,6 +312,13 @@ def create_emergency_fallback(text: str) -> str:
     chart_spec = create_fallback_chart_spec(text)
     return str({'spec': chart_spec})
 
+
+def create_png(spec: dict) -> bytes:
+    """Convert a Plotly spec to PNG bytes."""
+    fig = go.Figure(spec.get('data', []), spec.get('layout', {}))
+    return pio.to_image(fig, format='png', width=800, height=500)
+
+
 def create_agent():
     """Create the PROPER AI visualization agent"""
     return ConversableAgent(
@@ -460,5 +326,8 @@ def create_agent():
         system_message=visualization_agent_system_message,
         llm_config=llm_config,
         human_input_mode="NEVER",
-        function_map={"create_visualization": create_visualization}
-    ) 
+        function_map={
+            "create_visualization": create_visualization,
+            "create_png": create_png,
+        },
+    )

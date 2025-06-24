@@ -768,83 +768,22 @@ class GroupChat:
                                             if not spec_data:
                                                 raise ValueError("No spec data found in visualization result")
                                             
-                                            print("🎨 Converting Plotly chart to image for Teams...")
-                                            
-                                            # ✅ CREATE ACTUAL PLOTLY CHART IMAGE
+                                            print("📊 Generating Plotly PNG for Teams...")
+
                                             try:
-                                                import plotly.graph_objects as go
-                                                import plotly.io as pio
-                                                import io
-                                                import base64
-                                                
-                                                # Create figure from spec
-                                                fig = go.Figure()
-                                                
-                                                # Add traces from spec
-                                                for trace_data in spec_data.get('data', []):
-                                                    fig.add_trace(go.Scatter(
-                                                        x=trace_data.get('x', []),
-                                                        y=trace_data.get('y', []),
-                                                        mode=trace_data.get('mode', 'lines+markers'),
-                                                        name=trace_data.get('name', 'Data'),
-                                                        line=trace_data.get('line', {}),
-                                                        marker=trace_data.get('marker', {})
-                                                    ))
-                                                
-                                                # Apply layout from spec
-                                                layout = spec_data.get('layout', {})
-                                                # Fix: Handle case where layout.title might be a string instead of dict
-                                                if isinstance(layout, dict):
-                                                    title_value = layout.get('title', 'Chart')
-                                                    if isinstance(title_value, dict):
-                                                        chart_title = title_value.get('text', 'Chart')
-                                                    else:
-                                                        chart_title = str(title_value)
-                                                    xaxis_title = layout.get('xaxis', {}).get('title', 'X-axis') if isinstance(layout.get('xaxis'), dict) else 'X-axis'
-                                                    yaxis_title = layout.get('yaxis', {}).get('title', 'Y-axis') if isinstance(layout.get('yaxis'), dict) else 'Y-axis'
-                                                else:
-                                                    chart_title = 'Chart'
-                                                    xaxis_title = 'X-axis'
-                                                    yaxis_title = 'Y-axis'
-                                                
-                                                fig.update_layout(
-                                                    title=chart_title,
-                                                    xaxis_title=xaxis_title,
-                                                    yaxis_title=yaxis_title,
-                                                    width=800,
-                                                    height=500,
-                                                    plot_bgcolor='white',
-                                                    paper_bgcolor='white'
-                                                )
-                                                
-                                                # Convert to image bytes using kaleido
-                                                print("🖼️ Converting Plotly to PNG image...")
-                                                img_bytes = pio.to_image(fig, format='png', width=800, height=500)
-                                                
-                                                # Create a file-like object
-                                                img_io = io.BytesIO(img_bytes)
-                                                img_io.seek(0)
-                                                
-                                                # Send as Chainlit Image
-                                                chart_image = cl.Image(
-                                                    content=img_bytes,
-                                                    name="forecast_chart.png",
-                                                    display="inline"
-                                                )
-                                                
+                                                img_bytes = data_visualization_agent.create_png(spec_data)
+                                                chart_image = cl.Image(content=img_bytes, name="forecast_chart.png", display="inline")
                                                 await cl.Message(
                                                     content="📊 **Chart**",
                                                     elements=[chart_image],
                                                     author=get_chainlit_author_from_role(author)
                                                 ).send()
-                                                
-                                                print("✅ Successfully sent chart image to Teams!")
-                                                return  # Don't process as regular message
-                                                
-                                            except Exception as plot_error:
-                                                print(f"❌ Plotly image conversion failed: {plot_error}")
-                                                import traceback
-                                                print(f"❌ Plot traceback: {traceback.format_exc()}")
+
+                                                print("✅ PNG chart sent to Teams!")
+                                                return
+
+                                            except Exception as img_error:
+                                                print(f"❌ PNG generation failed: {img_error}")
                                                 
                                                 # Fallback to enhanced text visualization
                                                 print("⚠️ Falling back to text visualization...")
