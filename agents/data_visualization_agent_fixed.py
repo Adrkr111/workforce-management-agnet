@@ -9,6 +9,25 @@ from typing import Optional
 import pandas as pd
 from autogen import ConversableAgent
 from config import llm_config
+import plotly.graph_objects as go
+import plotly.io as pio
+
+
+def _parse_date(label: str) -> Optional[pd.Timestamp]:
+    """Parse a date string into a Timestamp if possible."""
+    if not isinstance(label, str) or not label.strip():
+        return None
+    for fmt in [None, "%Y-%m", "%B %Y", "%b %Y", "%Y"]:
+        try:
+            if fmt:
+                dt = pd.to_datetime(label, format=fmt, errors="coerce")
+            else:
+                dt = pd.to_datetime(label, errors="coerce")
+            if not pd.isna(dt):
+                return dt
+        except Exception:
+            continue
+    return None
 
 
 def _parse_date(label: str) -> Optional[pd.Timestamp]:
@@ -310,6 +329,13 @@ def create_emergency_fallback(text: str) -> str:
     chart_spec = create_fallback_chart_spec(text)
     return str({'spec': chart_spec})
 
+
+def create_png(spec: dict) -> bytes:
+    """Convert a Plotly spec to PNG bytes."""
+    fig = go.Figure(spec.get('data', []), spec.get('layout', {}))
+    return pio.to_image(fig, format='png', width=800, height=500)
+
+
 def create_agent():
     """Create the PROPER AI visualization agent"""
     return ConversableAgent(
@@ -317,5 +343,8 @@ def create_agent():
         system_message=visualization_agent_system_message,
         llm_config=llm_config,
         human_input_mode="NEVER",
-        function_map={"create_visualization": create_visualization}
-    ) 
+        function_map={
+            "create_visualization": create_visualization,
+            "create_png": create_png,
+        },
+    )
