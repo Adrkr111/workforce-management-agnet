@@ -4,5 +4,6 @@ from . import (
     data_visualization_agent_fixed as data_visualization_agent,
     orchestrator_agent,
     kpi_agent,
-    workforce_simulation_agent
+    workforce_simulation_agent,
+    chart_intelligence_agent
 )

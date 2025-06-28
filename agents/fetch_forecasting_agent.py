@@ -194,37 +194,44 @@ def fetch_forecast(args):
         # 🤖 INTELLIGENT CONVERSATIONAL PROCESSING AGENT
         print("🔥 RAW PROCESSING - Creating intelligent agent...")
         
-        # Create intelligent processing agent
+        # Create intelligent processing agent with increased token limit
+        enhanced_llm_config = llm_config.copy()
+        enhanced_llm_config["max_tokens"] = 2000  # Ensure enough tokens for complete table
+        enhanced_llm_config["temperature"] = 0.1  # More deterministic output
+        
         processing_agent = ConversableAgent(
             name="Forecast-Processing-Agent",
-            llm_config=llm_config,
+            llm_config=enhanced_llm_config,
             system_message=f"""
 🧠 **INTELLIGENT FORECAST FORMATTER & FILTER**
 
-You process vector search results according to user requirements. Your job:
+**🚨 CRITICAL: You MUST complete the entire table with ALL data rows. Do not truncate or stop mid-table.**
 
-1. **UNDERSTAND USER INTENT**: Analyze what the user specifically asked for
-2. **FILTER RESULTS**: Focus on exact matches and relevant data  
-3. **FORMAT OUTPUT**: Apply user's formatting preferences (table, list, summary, etc.)
-4. **BE CONVERSATIONAL**: Natural language, not robotic
+Your job:
+1. **EXTRACT FORECAST DATA**: Parse the forecast numbers from the search results
+2. **CREATE COMPLETE TABLE**: Include header + separator + ALL data rows
+3. **MATCH USER REQUEST**: Focus on the requested business/substream/team
 
 **📊 USER'S ORIGINAL REQUEST**: {original_user_request}
 
-**🎯 FORMATTING RULES**:
-- If user asks for "table" → Create clean markdown table format
-- If user asks for "summary" → Provide brief overview with key points
-- If user asks for "detailed" → Include trends and insights
-- If user asks for specific timeframe → Filter to those dates only
-- If user asks for specific team → Focus only on that team
-- Always prioritize exact team matches over partial matches
+**🎯 TABLE FORMAT REQUIREMENTS**:
+```
+| Business | Stream | Team | 2025-06-01 | 2025-07-01 | 2025-08-01 | ... |
+|----------|--------|------|------------|------------|------------|-----|
+| retail   | hrm    | growth | 4715     | 4720       | 4587       | ... |
+| retail   | hrm    | innovation | 4733 | 4982       | 5333       | ... |
+```
 
-**💡 EXAMPLES**:
-User: "get logistics forecast as a table" → Return markdown table
-User: "show me just Q4 numbers" → Extract Oct-Dec data only  
-User: "summarize the support team forecast" → Brief overview with key points
-User: "forecast data for next 6 months" → Focus on next 6 months only
+**🚨 CRITICAL RULES**:
+1. **COMPLETE THE TABLE**: Include ALL forecast data rows, not just headers
+2. **EXTRACT NUMBERS**: Parse forecast data like "2025-06-01: 4715, 2025-07-01: 4720"
+3. **NO TRUNCATION**: Finish the entire table before stopping
+4. **NO WRAPPER TEXT**: Return ONLY the markdown table
 
-**🚨 IMPORTANT**: Return ONLY the formatted content. No wrapper text like "Here's what I found" - just the actual data in the requested format.
+**💡 EXAMPLE OUTPUT**:
+| Business | Stream | Team | 2025-06-01 | 2025-07-01 | 2025-08-01 |
+|----------|--------|------|------------|------------|------------|
+| retail   | hrm    | growth | 4715     | 4720       | 4587       |
 """,
             human_input_mode="NEVER"
         )
@@ -276,6 +283,32 @@ TASK: Process these results according to the user's original request. Apply any 
             
             print(f"🔥 RAW PROCESSED CONTENT:")
             print(f"📄 Final Content: {processed_content[:400]}{'...' if len(processed_content) > 400 else ''}")
+            
+            # 🔧 QUALITY CHECK: Ensure response is complete (has data rows, not just headers)
+            if processed_content and '|' in processed_content:
+                lines = processed_content.strip().split('\n')
+                # Check if we have header + separator + at least one data row
+                if len(lines) < 3 or all('---' in line or 'Business' in line for line in lines):
+                    print("⚠️ DETECTED INCOMPLETE TABLE - Creating fallback response")
+                    # Create a simple fallback table with the best match data
+                    best_match = min(raw_results, key=lambda x: x['rank'])
+                    fallback_content = f"""| Business | Stream | Team | Month | Volume |
+|----------|--------|------|-------|--------|"""
+                    
+                    # Extract forecast data from the best match
+                    import re
+                    forecast_pattern = r'(\d{4}-\d{2}-\d{2}): (\d+)'
+                    matches = re.findall(forecast_pattern, best_match['document'])
+                    
+                    for date, volume in matches[:6]:  # Show first 6 months
+                        month_year = date[:7]  # Get YYYY-MM format
+                        business = best_match['metadata'].get('business', business_type)
+                        stream = best_match['metadata'].get('stream', substream_type) 
+                        team = best_match['metadata'].get('team', team_name)
+                        fallback_content += f"\n| {business} | {stream} | {team} | {month_year} | {volume} |"
+                    
+                    processed_content = fallback_content
+                    print(f"🔧 FALLBACK CONTENT: {processed_content}")
             
             # 📊 STORE IN VECTOR DATA STORE FOR VISUALIZATION ACCESS
             if _vector_data_store and _current_session_id:

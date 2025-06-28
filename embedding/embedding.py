@@ -10,6 +10,7 @@ def get_gemini_embedding(text):
         "content": {"parts": [{"text": text}]},
         "taskType": "RETRIEVAL_DOCUMENT"
     }
-    response = requests.post(ENDPOINT, json=payload)
+    # Add timeout to prevent hanging requests in enterprise environments
+    response = requests.post(ENDPOINT, json=payload, timeout=30)
     response.raise_for_status()
     return response.json()['embedding']['values']

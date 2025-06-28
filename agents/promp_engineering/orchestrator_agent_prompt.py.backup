@@ -51,15 +51,13 @@ Data Type: [FTE requirements/Volume forecast/Performance metric/etc.]
 Business Context: [Business unit + substream + team if available]
 
 Complete Data Set:
-[Date 1]: [Value 1]
-[Date 2]: [Value 2]
-[Continue for ALL data points]
+- [Date 1]: [Value 1] [unit if provided]
+- [Date 2]: [Value 2] [unit if provided]
+- [Continue for ALL data points]
 
 Chart Requirements:
 - Chart Type: [line/bar/pie/etc.]
 - Title: [suggested title based on context]
-- X-axis: [axis description]
-- Y-axis: [axis description]
 - Professional banking/fintech styling
 - Clear labels and formatting for Teams UI
 
@@ -163,7 +161,7 @@ May 2027: 3,758
 
 Chart Requirements:
 - Chart Type: Line chart (to show trend over time)
-- Title: "Logistics DLT Support Team - Extended Volume Forecast (June 2026 - Jan 2028)"
+- Title: "Logistics DLT Support Team - Extended Volume Forecast"
 - X-axis: Month/Year
 - Y-axis: Volume (cases)
 - Professional banking/fintech styling
